@@ -4,10 +4,10 @@
     "model_path": "models/stable-diffusion-xl-base-1.0",
     "device": "auto",
     "dtype": "auto",
-    "low_memory": true
+    "low_memory": false
   },
   "generation_params": {
-    "steps": 25,
+    "steps": 30,
     "guidance_scale": 7.5,
     "width": 1152,
     "height": 896,
@@ -16,7 +16,7 @@
   },
   "output_settings": {
     "output_dir": "output/images",
-    "save_metadata": true,
+    "save_metadata": false,
     "image_format": "jpg"
   },
   "default_prompts": {

@@ -8,7 +8,7 @@ This directory contains configuration files for different components of the Magi
 configs/
 ├── README.md                    # This file
 ├── image_generation/           # Image generation configurations
-│   └── default_image.json     # Default settings for image generation
+│   └── config.json     # Default settings for image generation
 ├── game_rules/                 # (Future) Game rules and card mechanics
 ├── database/                   # (Future) Database configurations
 └── api/                        # (Future) API settings
@@ -18,7 +18,7 @@ configs/
 
 The `image_generation/` subdirectory contains configurations for the AI image generation:
 
-- `default_image.json` - Default configuration with:
+- `config.json` - Default configuration with:
   - Model settings (SDXL, device, memory options)
   - Generation parameters (steps, guidance scale, dimensions)
   - Output settings (format, directory, metadata)
@@ -37,9 +37,9 @@ python generate_image.py --config configs/image_generation/my_custom_config.json
 
 ## Creating Custom Configs
 
-You can create custom configurations by copying `default_image.json` and modifying the parameters:
+You can create custom configurations by copying `config.json` and modifying the parameters:
 
 ```bash
-cp configs/image_generation/default_image.json configs/image_generation/high_quality.json
+cp configs/image_generation/config.json configs/image_generation/high_quality.json
 # Then edit high_quality.json with your preferred settings
 ```

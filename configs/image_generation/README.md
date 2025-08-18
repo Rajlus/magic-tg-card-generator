@@ -4,7 +4,7 @@ This directory contains configuration files for the AI image generation componen
 
 ## Available Configurations
 
-### default_image.json
+### config.json
 - **Purpose**: Default balanced settings for general use
 - **Model**: SDXL_LOCAL
 - **Quality**: Medium-High (25 steps, 1152x896)
@@ -55,7 +55,7 @@ Each configuration file contains:
 
 1. Copy an existing configuration:
 ```bash
-cp default_image.json my_custom_config.json
+cp config.json my_custom_config.json
 ```
 
 2. Modify parameters as needed:

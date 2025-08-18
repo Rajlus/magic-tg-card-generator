@@ -5,9 +5,8 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-import numpy as np
 import torch
 from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
 from PIL import Image
@@ -85,9 +84,11 @@ class ImageGenerator:
         """
         # Load configuration from file if provided
         self.config = self._load_config(config_file) if config_file else {}
-        
+
         # Set up directories
-        self.output_dir = output_dir or Path(self.config.get('output_settings', {}).get('output_dir', 'output/images'))
+        self.output_dir = output_dir or Path(
+            self.config.get("output_settings", {}).get("output_dir", "output/images")
+        )
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.models_dir = models_dir or Path("models")
@@ -96,32 +97,42 @@ class ImageGenerator:
         # Model configuration
         if model:
             self.model_config = model
-        elif 'image_generation' in self.config:
-            model_name = self.config['image_generation'].get('model', 'SD_1_5')
-            self.model_config = ModelConfig[model_name] if isinstance(model_name, str) else ModelConfig.SD_1_5
+        elif "image_generation" in self.config:
+            model_name = self.config["image_generation"].get("model", "SD_1_5")
+            self.model_config = (
+                ModelConfig[model_name]
+                if isinstance(model_name, str)
+                else ModelConfig.SD_1_5
+            )
         else:
             self.model_config = ModelConfig.SD_1_5
-            
-        self.device = self._setup_device(device or self.config.get('image_generation', {}).get('device'))
-        self.low_memory = low_memory or self.config.get('image_generation', {}).get('low_memory', False)
+
+        self.device = self._setup_device(
+            device or self.config.get("image_generation", {}).get("device")
+        )
+        self.low_memory = low_memory or self.config.get("image_generation", {}).get(
+            "low_memory", False
+        )
         self.pipeline: Optional[StableDiffusionPipeline] = None
 
-        logger.info(f"ImageGenerator initialized with {self.model_config.value} on {self.device}")
-    
-    def _load_config(self, config_file: Path) -> Dict[str, Any]:
+        logger.info(
+            f"ImageGenerator initialized with {self.model_config.value} on {self.device}"
+        )
+
+    def _load_config(self, config_file: Path) -> dict[str, Any]:
         """Load configuration from JSON file.
-        
+
         Args:
             config_file: Path to configuration file
-            
+
         Returns:
             Configuration dictionary
         """
         if not config_file.exists():
             logger.warning(f"Config file {config_file} not found, using defaults")
             return {}
-            
-        with open(config_file, 'r') as f:
+
+        with open(config_file) as f:
             config = json.load(f)
             logger.info(f"Loaded configuration from {config_file}")
             return config
@@ -135,7 +146,7 @@ class ImageGenerator:
         Returns:
             Device string ('cuda', 'mps', or 'cpu')
         """
-        if device:
+        if device and device != "auto":
             return device
 
         if torch.cuda.is_available():
@@ -187,11 +198,15 @@ class ImageGenerator:
                 logger.info(f"Using dtype: {dtype} for device: {self.device}")
             else:
                 # Load pipeline from Hugging Face
+                # Use float32 for MPS and CPU to avoid black images
+                dtype = (
+                    torch.float32 if self.device in ["mps", "cpu"] else torch.float16
+                )
+                logger.info(f"Using dtype: {dtype} for device: {self.device}")
+
                 self.pipeline = StableDiffusionPipeline.from_pretrained(
                     self.model_config.value,
-                    torch_dtype=torch.float16
-                    if self.device != "cpu"
-                    else torch.float32,
+                    torch_dtype=dtype,
                     cache_dir=self.models_dir,
                     safety_checker=None,  # Disable for performance
                     requires_safety_checker=False,
@@ -249,19 +264,21 @@ class ImageGenerator:
             style = ArtStyle.OIL_PAINTING
         if config is None:
             # Load generation params from config if available
-            if 'generation_params' in self.config:
-                params = self.config['generation_params']
+            if "generation_params" in self.config:
+                params = self.config["generation_params"]
                 config = GenerationConfig(
-                    num_inference_steps=params.get('steps', 30),
-                    guidance_scale=params.get('guidance_scale', 7.5),
-                    height=params.get('height', 512),
-                    width=params.get('width', 512),
-                    seed=params.get('seed'),
-                    negative_prompt=self.config.get('default_prompts', {}).get('negative_prompt')
+                    num_inference_steps=params.get("steps", 30),
+                    guidance_scale=params.get("guidance_scale", 7.5),
+                    height=params.get("height", 512),
+                    width=params.get("width", 512),
+                    seed=params.get("seed"),
+                    negative_prompt=self.config.get("default_prompts", {}).get(
+                        "negative_prompt"
+                    ),
                 )
             else:
                 config = GenerationConfig()
-                
+
         if not self.pipeline:
             self.load_model()
 
@@ -269,7 +286,10 @@ class ImageGenerator:
         if custom_prompt:
             prompt = custom_prompt
             # Add style suffix from config if available
-            if 'default_prompts' in self.config and 'style_suffix' in self.config['default_prompts']:
+            if (
+                "default_prompts" in self.config
+                and "style_suffix" in self.config["default_prompts"]
+            ):
                 prompt = f"{prompt}, {self.config['default_prompts']['style_suffix']}"
         else:
             prompt = self._build_prompt(card, style)
@@ -297,14 +317,14 @@ class ImageGenerator:
             # Get the generated image
             if hasattr(result, "images") and result.images:
                 image = result.images[0]
-                # Ensure image is in the right format
-                if image is not None:
-                    # Convert to PIL Image if needed
-                    if not isinstance(image, Image.Image):
-                        logger.warning("Image is not PIL format, attempting conversion")
-                        image = Image.fromarray((image * 255).astype(np.uint8))
-                else:
-                    raise ValueError("Pipeline returned None image")
+                # The pipeline should already return a PIL Image
+                if not isinstance(image, Image.Image):
+                    logger.error(f"Unexpected image type: {type(image)}")
+                    raise ValueError(
+                        f"Pipeline returned unexpected image type: {type(image)}"
+                    )
+                # Log image info for debugging
+                logger.info(f"Generated image: {image.size}, mode: {image.mode}")
             else:
                 raise ValueError("Pipeline returned no images")
 

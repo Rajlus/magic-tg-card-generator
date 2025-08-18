@@ -9,10 +9,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from magic_tg_card_generator.image_generator import (
-    ArtStyle,
-    GenerationConfig,
     ImageGenerator,
-    ModelConfig,
 )
 from magic_tg_card_generator.models import Card, CardType, Color
 
@@ -34,13 +31,23 @@ def main():
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/image_generation/default_image.json"),
+        default=Path("configs/image_generation/config.json"),
         help="Path to configuration file",
     )
     parser.add_argument(
         "--prompt",
         type=str,
         help="Custom prompt for image generation (optional)",
+    )
+    parser.add_argument(
+        "--style",
+        type=str,
+        help="Art style from config (e.g., fantasy_realism, digital_art, comic_book, watercolor, dark_fantasy)",
+    )
+    parser.add_argument(
+        "--list-styles",
+        action="store_true",
+        help="List available art styles from config and exit",
     )
     parser.add_argument(
         "--name",
@@ -87,14 +94,45 @@ def main():
     args = parser.parse_args()
     setup_logging(args.verbose)
 
+    # Handle --list-styles
+    if args.list_styles:
+        import json
+
+        config_path = args.config
+        if config_path.exists():
+            with open(config_path) as f:
+                config = json.load(f)
+
+            console.print(f"\n[blue]Available art styles in {config_path}:[/blue]")
+            if "art_styles" in config:
+                for style_name, style_desc in config["art_styles"].items():
+                    console.print(
+                        f"  [green]{style_name:20}[/green] - {style_desc[:60]}..."
+                    )
+            else:
+                console.print("[yellow]No art styles defined in config[/yellow]")
+        else:
+            console.print(f"[red]Config file not found: {config_path}[/red]")
+        return 0
+
     # Create card
+    card_type = CardType(args.type)
+
+    # Set default power/toughness for creatures if not provided
+    if card_type == CardType.CREATURE:
+        power = args.power if args.power is not None else 3
+        toughness = args.toughness if args.toughness is not None else 3
+    else:
+        power = None
+        toughness = None
+
     card = Card(
         name=args.name,
-        card_type=CardType(args.type),
+        card_type=card_type,
         mana_cost="3",
         color=Color(args.color),
-        power=args.power,
-        toughness=args.toughness,
+        power=power,
+        toughness=toughness,
     )
 
     # Initialize image generator with config
@@ -110,6 +148,26 @@ def main():
             default=None,
         )
 
+    # Apply art style from config if specified
+    if args.style and custom_prompt:
+        # Load art styles from config
+        if (
+            "art_styles" in generator.config
+            and args.style in generator.config["art_styles"]
+        ):
+            style_suffix = generator.config["art_styles"][args.style]
+            custom_prompt = f"{custom_prompt}, {style_suffix}"
+            console.print(f"[dim]Applying art style: {args.style}[/dim]")
+        else:
+            available_styles = list(generator.config.get("art_styles", {}).keys())
+            console.print(
+                f"[yellow]Warning: Style '{args.style}' not found in config[/yellow]"
+            )
+            if available_styles:
+                console.print(
+                    f"[dim]Available styles: {', '.join(available_styles)}[/dim]"
+                )
+
     # Generate image
     console.print(f"\n[blue]Generating image for {card.name}...[/blue]")
 
@@ -117,7 +175,9 @@ def main():
         if custom_prompt:
             console.print(f"[dim]Using custom prompt: {custom_prompt[:100]}...[/dim]")
         else:
-            console.print(f"[dim]Using auto-generated prompt based on card attributes[/dim]")
+            console.print(
+                "[dim]Using auto-generated prompt based on card attributes[/dim]"
+            )
 
         image_path = generator.generate_card_art(
             card=card,

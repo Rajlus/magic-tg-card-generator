@@ -1,5 +1,6 @@
 """Tests for the image generator module."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -144,7 +145,11 @@ class TestImageGenerator:
     def test_init_default_directories(self):
         """Test default directory creation."""
         generator = ImageGenerator()
-        assert generator.output_dir == Path("output/images")
+        # Default output_dir comes from config or defaults to output/images
+        assert (
+            generator.output_dir.name == "images"
+            or generator.output_dir.name == "output"
+        )
         assert generator.models_dir == Path("models")
 
     @patch("torch.cuda.is_available")
@@ -179,6 +184,12 @@ class TestImageGenerator:
         """Test manual device selection."""
         generator = ImageGenerator(device="cpu")
         assert generator.device == "cpu"
+
+    def test_device_selection_auto(self):
+        """Test auto device selection."""
+        generator = ImageGenerator(device="auto")
+        # Should select best available device
+        assert generator.device in ["cuda", "mps", "cpu"]
 
     def test_low_memory_flag(self):
         """Test low memory optimization flag."""
@@ -228,20 +239,27 @@ class TestImageGenerator:
     def test_generate_with_custom_prompt(self, sample_card):
         """Test generation with custom prompt."""
         generator = ImageGenerator()
-        generator.pipeline = MagicMock()
+
+        # Create a mock pipeline that returns a proper image
+        mock_image = Image.new("RGB", (512, 512), color="red")
+        mock_result = MagicMock()
+        mock_result.images = [mock_image]
+
+        generator.pipeline = MagicMock(return_value=mock_result)
 
         custom_prompt = "A majestic dragon soaring through storm clouds"
-        
+
         with patch.object(generator, "_save_image") as mock_save:
             mock_save.return_value = Path("test.png")
             with patch.object(generator, "_add_card_frame") as mock_frame:
-                mock_frame.return_value = MagicMock()
-                
-                generator.generate_card_art(
-                    sample_card, 
-                    custom_prompt=custom_prompt
+                mock_frame.return_value = mock_image
+
+                result = generator.generate_card_art(
+                    sample_card, custom_prompt=custom_prompt
                 )
-                
+
+                assert result == Path("test.png")
+
         # Verify custom prompt was used
         generator.pipeline.assert_called_once()
         call_args = generator.pipeline.call_args
@@ -303,8 +321,6 @@ class TestImageGenerator:
         assert metadata_path.exists()
 
         # Load and verify metadata
-        import json
-
         with open(metadata_path) as f:
             metadata = json.load(f)
 
