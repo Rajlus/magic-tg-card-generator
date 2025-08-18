@@ -1,0 +1,14 @@
+{
+  "prompt": "Majestic elder dragon lord, ancient and wise, golden scales with intricate patterns, mystical aura, floating in clouds above mountain peaks, oil painting style, Renaissance art, masterpiece quality, ultra detailed, 8k resolution",
+  "negative_prompt": "low quality, blurry, pixelated, text, watermark, signature, extra limbs, deformed, ugly, bad anatomy",
+  "model": "SDXL_LOCAL",
+  "steps": 25,
+  "guidance_scale": 7.5,
+  "width": 1152,
+  "height": 896,
+  "seed": null,
+  "batch_size": 1,
+  "style": "DIGITAL_ART",
+  "output_dir": "output/images",
+  "low_memory": true
+}

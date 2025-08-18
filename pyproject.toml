@@ -1,0 +1,105 @@
+[tool.poetry]
+name = "magic-tg-card-generator"
+version = "0.1.0"
+description = "A Magic: The Gathering card generator application"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{include = "magic_tg_card_generator", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.5.0"
+python-dotenv = "^1.0.0"
+httpx = "^0.25.0"
+rich = "^13.7.0"
+pillow = "^10.1.0"
+torch = {version = ">=2.0.0,<3.0", optional = true, source = "pytorch"}
+diffusers = {version = "^0.24.0", optional = true}
+transformers = {version = "^4.35.0", optional = true}
+accelerate = {version = "^0.25.0", optional = true}
+safetensors = {version = "^0.4.0", optional = true}
+xformers = {version = "^0.0.23", optional = true, markers = "sys_platform != 'darwin'"}
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "supplemental"
+
+[tool.poetry.extras]
+image-generation = ["torch", "diffusers", "transformers", "accelerate", "safetensors"]
+image-generation-cuda = ["torch", "diffusers", "transformers", "accelerate", "safetensors", "xformers"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+black = "^23.11.0"
+ruff = "^0.1.6"
+pre-commit = "^3.5.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.isort]
+known-third-party = ["pydantic", "httpx", "pytest"]
+
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
