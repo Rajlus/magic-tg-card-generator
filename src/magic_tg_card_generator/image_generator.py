@@ -2,14 +2,28 @@
 
 import json
 import logging
+import os
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+# Set MPS memory limit to allow FLUX to use all available memory
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 import torch
 from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
 from PIL import Image
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 from magic_tg_card_generator.models import Card, CardType, Color
 
@@ -35,6 +49,17 @@ class ModelConfig(str, Enum):
     SD_2_1 = "stabilityai/stable-diffusion-2-1"  # ~5GB VRAM, newer architecture
     SDXL_BASE = "stabilityai/stable-diffusion-xl-base-1.0"  # ~8GB VRAM, highest quality
     SDXL_LOCAL = "models/sd_xl_base_1.0.safetensors"  # Local SDXL model file
+    SDXL_TURBO = "stabilityai/sdxl-turbo"  # ~8GB VRAM, ultra-fast (1-4 steps)
+    PLAYGROUND_V2 = (
+        "playgroundai/playground-v2.5-1024px-aesthetic"  # ~8GB VRAM, aesthetic focus
+    )
+    FLUX_DEV = (
+        "black-forest-labs/FLUX.1-dev"  # ~24GB VRAM, state-of-the-art (requires auth)
+    )
+    FLUX_SCHNELL = (
+        "black-forest-labs/FLUX.1-schnell"  # ~24GB VRAM, faster (requires auth)
+    )
+    FLUX_DEV_LOCAL = "models/flux1-dev.safetensors"  # Local FLUX.1-dev model file
 
 
 class GenerationConfig:
@@ -120,7 +145,7 @@ class ImageGenerator:
         )
 
     def _load_config(self, config_file: Path) -> dict[str, Any]:
-        """Load configuration from JSON file.
+        """Load configuration from JSON or YAML file.
 
         Args:
             config_file: Path to configuration file
@@ -133,7 +158,10 @@ class ImageGenerator:
             return {}
 
         with open(config_file) as f:
-            config = json.load(f)
+            if config_file.suffix in [".yml", ".yaml"]:
+                config = yaml.safe_load(f)
+            else:
+                config = json.load(f)
             logger.info(f"Loaded configuration from {config_file}")
             return config
 
@@ -196,8 +224,77 @@ class ImageGenerator:
                     requires_safety_checker=False,
                 )
                 logger.info(f"Using dtype: {dtype} for device: {self.device}")
+            elif self.model_config == ModelConfig.FLUX_DEV_LOCAL:
+                # NOTE: The local flux1-dev.safetensors is 22GB and can't be loaded directly
+                # We use the downloaded FLUX.1-dev from Hugging Face instead
+                # The local file was meant for direct loading but it's too large for M1/M2
+
+                from diffusers import FluxPipeline
+                from huggingface_hub import login
+
+                logger.info(
+                    "Loading FLUX.1-dev from cache (not using local 22GB file)..."
+                )
+                logger.info(
+                    "Note: The 22GB local file is too large for direct loading on Apple Silicon"
+                )
+
+                # Try to use HF token if available (now loaded from .env)
+                hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+                if hf_token:
+                    logger.info("Using Hugging Face token for authentication")
+                    login(token=hf_token)
+
+                # Use float16 to save memory on MPS
+                if self.device == "mps":
+                    dtype = torch.float16
+                    logger.info("Using float16 for MPS to save memory")
+                elif self.device == "cuda":
+                    dtype = torch.bfloat16
+                else:
+                    dtype = torch.float32
+
+                try:
+                    logger.info(
+                        "Loading FLUX from cache with maximum memory optimization..."
+                    )
+                    # Load with all memory optimizations
+                    self.pipeline = FluxPipeline.from_pretrained(
+                        "black-forest-labs/FLUX.1-dev",
+                        torch_dtype=dtype,
+                        cache_dir=self.models_dir,
+                        local_files_only=True,  # Use only cached files
+                        low_cpu_mem_usage=True,  # Reduce CPU memory during loading
+                        use_safetensors=True,
+                    )
+
+                    logger.info("FLUX model loaded from cache!")
+
+                except Exception as e:
+                    logger.error(f"Failed to load FLUX: {e}")
+                    logger.error(
+                        "Try using FLUX.1-schnell instead which uses less memory"
+                    )
+                    raise
+
+                logger.info(f"Using dtype: {dtype} for device: {self.device}")
+            elif self.model_config in [ModelConfig.FLUX_DEV, ModelConfig.FLUX_SCHNELL]:
+                # Load FLUX model
+                from diffusers import FluxPipeline
+
+                dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+                logger.info(f"Loading FLUX model: {self.model_config.value}")
+                logger.info(f"Using dtype: {dtype} for device: {self.device}")
+
+                self.pipeline = FluxPipeline.from_pretrained(
+                    self.model_config.value,
+                    torch_dtype=dtype,
+                    cache_dir=self.models_dir,
+                    local_files_only=False,
+                    resume_download=True,
+                )
             else:
-                # Load pipeline from Hugging Face
+                # Load standard Stable Diffusion pipeline from Hugging Face
                 # Use float32 for MPS and CPU to avoid black images
                 dtype = (
                     torch.float32 if self.device in ["mps", "cpu"] else torch.float16
@@ -214,27 +311,70 @@ class ImageGenerator:
                     resume_download=True,  # Resume interrupted downloads
                 )
 
-            # Move to device
-            self.pipeline = self.pipeline.to(self.device)
+            # Move to device - but for FLUX on MPS, use memory optimizations
+            if self.model_config in [
+                ModelConfig.FLUX_DEV_LOCAL,
+                ModelConfig.FLUX_DEV,
+                ModelConfig.FLUX_SCHNELL,
+            ]:
+                # FLUX needs special handling for memory
+                if self.device == "mps":
+                    logger.info("Moving FLUX to MPS with memory optimizations")
+                    # Move to MPS directly
+                    self.pipeline = self.pipeline.to(self.device)
 
-            # Use faster scheduler
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
-                self.pipeline.scheduler.config
-            )
+                    # Enable ALL memory optimizations for FLUX on MPS
+                    if hasattr(self.pipeline, "enable_attention_slicing"):
+                        self.pipeline.enable_attention_slicing()
+                        logger.info("Enabled attention slicing")
+                    if hasattr(self.pipeline, "enable_vae_slicing"):
+                        self.pipeline.enable_vae_slicing()
+                        logger.info("Enabled VAE slicing")
+                    if hasattr(self.pipeline, "enable_vae_tiling"):
+                        self.pipeline.enable_vae_tiling()
+                        logger.info("Enabled VAE tiling")
+                    if hasattr(
+                        self.pipeline, "enable_xformers_memory_efficient_attention"
+                    ):
+                        try:
+                            self.pipeline.enable_xformers_memory_efficient_attention()
+                            logger.info("Enabled xformers memory efficient attention")
+                        except:
+                            pass
+                else:
+                    self.pipeline = self.pipeline.to(self.device)
+            else:
+                # Standard models
+                self.pipeline = self.pipeline.to(self.device)
 
-            # Enable memory optimizations
-            if self.low_memory:
-                if hasattr(self.pipeline, "enable_attention_slicing"):
+            # Use faster scheduler (not for FLUX - it has its own)
+            if self.model_config not in [
+                ModelConfig.FLUX_DEV_LOCAL,
+                ModelConfig.FLUX_DEV,
+                ModelConfig.FLUX_SCHNELL,
+            ]:
+                self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                    self.pipeline.scheduler.config
+                )
+
+            # Enable memory optimizations for non-FLUX models
+            if self.model_config not in [
+                ModelConfig.FLUX_DEV_LOCAL,
+                ModelConfig.FLUX_DEV,
+                ModelConfig.FLUX_SCHNELL,
+            ]:
+                if self.low_memory:
+                    if hasattr(self.pipeline, "enable_attention_slicing"):
+                        self.pipeline.enable_attention_slicing()
+                    # CPU offloading requires accelerate package
+                    if hasattr(self.pipeline, "enable_model_cpu_offload"):
+                        try:
+                            self.pipeline.enable_model_cpu_offload()
+                        except RuntimeError as e:
+                            logger.warning(f"Could not enable CPU offloading: {e}")
+                            # Continue without this optimization
+                elif hasattr(self.pipeline, "enable_attention_slicing"):
                     self.pipeline.enable_attention_slicing()
-                # CPU offloading requires accelerate package
-                if hasattr(self.pipeline, "enable_model_cpu_offload"):
-                    try:
-                        self.pipeline.enable_model_cpu_offload()
-                    except RuntimeError as e:
-                        logger.warning(f"Could not enable CPU offloading: {e}")
-                        # Continue without this optimization
-            elif hasattr(self.pipeline, "enable_attention_slicing"):
-                self.pipeline.enable_attention_slicing()
 
             logger.info("Model loaded successfully")
 
@@ -304,15 +444,30 @@ class ImageGenerator:
         try:
             # Generate image
             with torch.no_grad():
-                result = self.pipeline(
-                    prompt=prompt,
-                    negative_prompt=config.negative_prompt,
-                    width=config.width,
-                    height=config.height,
-                    num_inference_steps=config.num_inference_steps,
-                    guidance_scale=config.guidance_scale,
-                    generator=generator,
-                )
+                # FLUX models don't use negative prompts
+                if self.model_config in [
+                    ModelConfig.FLUX_DEV,
+                    ModelConfig.FLUX_SCHNELL,
+                    ModelConfig.FLUX_DEV_LOCAL,
+                ]:
+                    result = self.pipeline(
+                        prompt=prompt,
+                        width=config.width,
+                        height=config.height,
+                        num_inference_steps=config.num_inference_steps,
+                        guidance_scale=config.guidance_scale,
+                        generator=generator,
+                    )
+                else:
+                    result = self.pipeline(
+                        prompt=prompt,
+                        negative_prompt=config.negative_prompt,
+                        width=config.width,
+                        height=config.height,
+                        num_inference_steps=config.num_inference_steps,
+                        guidance_scale=config.guidance_scale,
+                        generator=generator,
+                    )
 
             # Get the generated image
             if hasattr(result, "images") and result.images:

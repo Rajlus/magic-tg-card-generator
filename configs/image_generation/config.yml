@@ -1,0 +1,121 @@
+# Magic TG Card Generator Configuration
+
+# Image Generation Settings
+image_generation:
+  # Default mode: "local" or "api"
+  default_mode: local
+
+  # Local generation settings
+  local:
+    model: SDXL_LOCAL
+    model_path: models/stable-diffusion-xl-base-1.0
+    device: auto
+    dtype: auto
+    low_memory: false
+
+  # API generation settings
+  api:
+    default_model: flux-schnell
+    # Available models: flux-schnell, flux-dev, flux-pro, sdxl, sdxl-lightning, imag
+
+# Generation Parameters
+generation_params:
+  steps: 30
+  guidance_scale: 7.5
+  width: 1152
+  height: 896
+  aspect_ratio: "4:3"  # For Flux models
+  # Valid aspect ratios for Flux:
+  # - "1:1"   (1024x1024) - Square
+  # - "4:3"   (1152x896)  - Classic landscape
+  # - "3:4"   (896x1152)  - Classic portrait
+  # - "16:9"  (1344x768)  - Widescreen
+  # - "9:16"  (768x1344)  - Vertical mobile
+  # - "3:2"   (1536x1024) - Photo landscape
+  # - "2:3"   (1024x1536) - Photo portrait
+  # - "5:4"   (1280x1024) - Near square landscape
+  # - "4:5"   (1024x1280) - Near square portrait
+  # - "21:9"  (2520x1080) - Ultra-wide
+  # - "9:21"  (1080x2520) - Ultra-tall
+  seed: null
+  batch_size: 1
+
+# Output Settings
+output_settings:
+  output_dir: output/images
+  save_metadata: false
+  image_format: jpg
+
+# Default Prompts
+default_prompts:
+  negative_prompt: "low quality, blurry, pixelated, text, watermark, signature, extra limbs, deformed, ugly, bad anatomy, wrong proportions, mutated, disfigured, poorly drawn, bad art"
+  style_suffix: "masterpiece quality, ultra detailed, 8k resolution, professional artwork"
+
+# Art Styles (expanded selection)
+art_styles:
+  # Painting Styles
+  fantasy_realism: "fantasy realism style, oil painting, Renaissance art, classical masters technique"
+  digital_art: "digital art style, modern illustration, vibrant colors, clean lines, professional concept art"
+  comic_book: "comic book style, bold lines, dynamic composition, action poses, graphic novel aesthetic"
+  watercolor: "watercolor painting style, soft edges, flowing colors, translucent layers, artistic brushwork"
+  dark_fantasy: "dark fantasy style, gothic atmosphere, dramatic shadows, moody lighting, sinister aesthetic"
+
+  # Additional Painting Techniques
+  impressionist: "impressionist painting style, visible brushstrokes, light and color focus, Monet-inspired"
+  abstract: "abstract art style, non-representational, bold shapes, experimental colors, modern art"
+  surrealist: "surrealist art style, dreamlike quality, impossible geometry, Salvador Dali inspired"
+  art_nouveau: "Art Nouveau style, ornamental design, flowing organic lines, Alphonse Mucha inspired"
+  baroque: "Baroque painting style, dramatic lighting, rich colors, Caravaggio-inspired chiaroscuro"
+
+  # Digital and Modern Styles
+  cyberpunk: "cyberpunk aesthetic, neon lights, futuristic technology, dystopian atmosphere, blade runner style"
+  steampunk: "steampunk style, Victorian era, brass and copper, mechanical gears, retro-futuristic"
+  anime: "anime art style, Japanese animation, expressive eyes, dynamic action, manga-inspired"
+  pixel_art: "pixel art style, 16-bit aesthetic, retro gaming, limited color palette, nostalgic feel"
+  low_poly: "low poly 3D style, geometric shapes, flat shading, minimalist 3D aesthetic"
+
+  # Photography-Inspired
+  photorealistic: "photorealistic rendering, hyperrealistic detail, professional photography, studio lighting"
+  cinematic: "cinematic style, movie poster aesthetic, dramatic composition, film lighting, epic scale"
+  noir: "film noir style, black and white, high contrast, dramatic shadows, 1940s detective aesthetic"
+
+  # Historical Art Periods
+  medieval: "medieval illuminated manuscript style, gold leaf details, ornate borders, Gothic aesthetic"
+  ukiyo_e: "Ukiyo-e Japanese woodblock print style, flat colors, bold outlines, Hokusai inspired"
+  art_deco: "Art Deco style, geometric patterns, luxury aesthetic, 1920s elegance, Great Gatsby era"
+  pop_art: "Pop Art style, bold colors, Ben Day dots, Andy Warhol inspired, commercial art aesthetic"
+
+  # Fantasy Specific
+  high_fantasy: "high fantasy epic style, Lord of the Rings aesthetic, grand scale, heroic atmosphere"
+  fairy_tale: "fairy tale illustration style, whimsical, storybook quality, children's book aesthetic"
+  cosmic_horror: "cosmic horror style, Lovecraftian aesthetic, otherworldly beings, existential dread"
+  mythological: "mythological art style, classical mythology, epic heroes, divine beings, ancient legends"
+
+  # Magic: The Gathering specific
+  mtg_classic: "Magic: The Gathering card art style, detailed fantasy illustration, Rebecca Guay inspired, traditional MTG aesthetic, painted texture, rich colors, dramatic lighting, professional trading card game artwork"
+  mtg_modern: "modern Magic: The Gathering digital art style, Magali Villeneuve inspired, crisp digital painting, dynamic composition, vibrant magical effects, contemporary MTG card illustration"
+  mtg_showcase: "Magic: The Gathering showcase art style, alternative art treatment, borderless aesthetic, premium collector style, unique artistic interpretation, special edition card artwork"
+  mtg_oil: "Oil on canvas painting. Magic the gathering art. Rough brushstrokes"
+
+# Model-specific configurations
+model_configs:
+  SDXL_LOCAL:
+    steps: 30
+    guidance_scale: 7.5
+    scheduler: DPMSolverMultistepScheduler
+
+  flux-schnell:
+    steps: 4
+    guidance_scale: 0  # Not used for schnell
+
+  flux-dev:
+    steps: 25
+    guidance_scale: 3.5
+
+  sdxl-lightning:
+    steps: 4
+    guidance_scale: 0
+
+  sdxl:
+    steps: 30
+    guidance_scale: 7.5

@@ -31,7 +31,7 @@ def main():
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/image_generation/config.json"),
+        default=Path("configs/image_generation/config.yml"),
         help="Path to configuration file",
     )
     parser.add_argument(
@@ -98,10 +98,15 @@ def main():
     if args.list_styles:
         import json
 
+        import yaml
+
         config_path = args.config
         if config_path.exists():
             with open(config_path) as f:
-                config = json.load(f)
+                if config_path.suffix in [".yml", ".yaml"]:
+                    config = yaml.safe_load(f)
+                else:
+                    config = json.load(f)
 
             console.print(f"\n[blue]Available art styles in {config_path}:[/blue]")
             if "art_styles" in config:
