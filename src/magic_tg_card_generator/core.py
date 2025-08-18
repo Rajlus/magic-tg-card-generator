@@ -5,7 +5,6 @@ import logging
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from magic_tg_card_generator.models import Card, CardType, Color
 
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 class CardGenerator:
     """Main class for generating Magic: The Gathering cards."""
 
-    def __init__(self, output_dir: Optional[Path] = None) -> None:
+    def __init__(self, output_dir: Path | None = None) -> None:
         """Initialize the card generator.
 
         Args:
@@ -30,10 +29,10 @@ class CardGenerator:
         name: str,
         card_type: CardType,
         mana_cost: str,
-        color: Optional[Color] = None,
-        power: Optional[int] = None,
-        toughness: Optional[int] = None,
-        text: Optional[str] = None,
+        color: Color | None = None,
+        power: int | None = None,
+        toughness: int | None = None,
+        text: str | None = None,
         save: bool = True,
     ) -> Card:
         """Generate a new Magic card.
@@ -51,6 +50,13 @@ class CardGenerator:
         Returns:
             A new Card instance
         """
+        # Set default power/toughness for creatures if not provided
+        if card_type == CardType.CREATURE:
+            if power is None:
+                power = 2
+            if toughness is None:
+                toughness = 2
+
         card = Card(
             name=name,
             card_type=card_type,
@@ -114,9 +120,17 @@ class CardGenerator:
             List of generated cards
         """
         cards = []
-        for _ in range(count):
+        used_names = set()
+        attempts = 0
+        max_attempts = count * 10  # Prevent infinite loop
+
+        while len(cards) < count and attempts < max_attempts:
             card = self.generate_random()
-            cards.append(card)
+            if card.name not in used_names:
+                cards.append(card)
+                used_names.add(card.name)
+            attempts += 1
+
         return cards
 
     def generate_random(self) -> Card:

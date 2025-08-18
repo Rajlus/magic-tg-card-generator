@@ -23,11 +23,11 @@ class TestFullCoverage:
             "generate",
             "Test",
             "--type",
-            "creature",
+            "Creature",
             "--mana-cost",
             "3",
             "--color",
-            "red",
+            "Red",
             "--power",
             "3",
             "--toughness",
@@ -68,11 +68,11 @@ class TestFullCoverage:
             "generate",
             "Test",
             "--type",
-            "instant",
+            "Instant",
             "--mana-cost",
             "1U",
             "--color",
-            "blue",
+            "Blue",
         ]
 
         with patch("magic_tg_card_generator.cli.CardGenerator") as mock_gen:
@@ -165,37 +165,24 @@ class TestFullCoverage:
         """Test batch generation."""
         gen = CardGenerator()
 
-        with patch.object(gen, "generate_random") as mock_random:
-            mock_random.return_value = Card(
-                name="Random",
-                card_type=CardType.INSTANT,
-                mana_cost="1",
-                color=Color.BLUE,
-            )
+        cards = gen.generate_batch(3)
 
-            cards = gen.generate_batch(3)
-
-            assert len(cards) == 3
-            assert mock_random.call_count == 3
+        assert len(cards) == 3
+        # All cards should have unique names
+        names = [card.name for card in cards]
+        assert len(names) == len(set(names))
 
     def test_core_generate_random(self):
         """Test random card generation."""
         gen = CardGenerator()
 
-        with patch("random.choice") as mock_choice:
-            mock_choice.side_effect = [
-                "Random Card",
-                CardType.CREATURE,
-                "3RR",
-                Color.RED,
-                5,
-                4,  # power, toughness
-                "Flying",
-            ]
+        card = gen.generate_random()
 
-            card = gen.generate_random()
-
-            assert card is not None
+        assert card is not None
+        assert card.name is not None
+        assert card.card_type in CardType
+        assert card.color in Color
+        assert card.mana_cost is not None
 
     def test_models_card_validation(self):
         """Test Card model validation."""
@@ -278,11 +265,11 @@ class TestFullCoverage:
             "generate",
             "Full Card",
             "--type",
-            "creature",
+            "Creature",
             "--mana-cost",
             "3WW",
             "--color",
-            "white",
+            "White",
             "--power",
             "4",
             "--toughness",
