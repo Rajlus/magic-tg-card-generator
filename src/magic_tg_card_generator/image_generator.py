@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
 from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
@@ -46,8 +46,8 @@ class GenerationConfig:
         guidance_scale: float = 7.5,
         height: int = 512,
         width: int = 512,
-        seed: Optional[int] = None,
-        negative_prompt: Optional[str] = None,
+        seed: int | None = None,
+        negative_prompt: str | None = None,
     ):
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
@@ -65,11 +65,11 @@ class ImageGenerator:
 
     def __init__(
         self,
-        config_file: Optional[Path] = None,
-        model: Optional[ModelConfig] = None,
-        models_dir: Optional[Path] = None,
-        output_dir: Optional[Path] = None,
-        device: Optional[str] = None,
+        config_file: Path | None = None,
+        model: ModelConfig | None = None,
+        models_dir: Path | None = None,
+        output_dir: Path | None = None,
+        device: str | None = None,
         low_memory: bool = False,
     ) -> None:
         """Initialize the image generator.
@@ -113,7 +113,7 @@ class ImageGenerator:
         self.low_memory = low_memory or self.config.get("image_generation", {}).get(
             "low_memory", False
         )
-        self.pipeline: Optional[StableDiffusionPipeline] = None
+        self.pipeline: StableDiffusionPipeline | None = None
 
         logger.info(
             f"ImageGenerator initialized with {self.model_config.value} on {self.device}"
@@ -137,7 +137,7 @@ class ImageGenerator:
             logger.info(f"Loaded configuration from {config_file}")
             return config
 
-    def _setup_device(self, device: Optional[str]) -> str:
+    def _setup_device(self, device: str | None) -> str:
         """Determine the best device to use for generation.
 
         Args:
@@ -245,9 +245,9 @@ class ImageGenerator:
     def generate_card_art(
         self,
         card: Card,
-        style: Optional[ArtStyle] = None,
-        config: Optional[GenerationConfig] = None,
-        custom_prompt: Optional[str] = None,
+        style: ArtStyle | None = None,
+        config: GenerationConfig | None = None,
+        custom_prompt: str | None = None,
     ) -> Path:
         """Generate artwork for a Magic card.
 
@@ -355,12 +355,11 @@ class ImageGenerator:
         prompt_parts = [f"A {card.name}"]
 
         # Add creature description
-        if card.card_type == CardType.CREATURE:
-            if card.power and card.toughness:
-                if card.power >= 5:
-                    prompt_parts.append("powerful and imposing")
-                elif card.power <= 2:
-                    prompt_parts.append("small but cunning")
+        if card.card_type == CardType.CREATURE and card.power and card.toughness:
+            if card.power >= 5:
+                prompt_parts.append("powerful and imposing")
+            elif card.power <= 2:
+                prompt_parts.append("small but cunning")
 
         # Add color-specific elements
         color_descriptions = {
@@ -406,7 +405,8 @@ class ImageGenerator:
             Image with card frame added
         """
         # For now, just return the image as-is
-        # TODO: Implement actual card frame overlay
+        # TODO: Implement actual card frame overlay with card data
+        _ = card  # Will be used when frame is implemented
         return image
 
     def _save_image(self, image: Image.Image, card: Card) -> Path:
@@ -445,8 +445,8 @@ class ImageGenerator:
     def generate_batch(
         self,
         cards: list[Card],
-        style: Optional[ArtStyle] = None,
-        config: Optional[GenerationConfig] = None,
+        style: ArtStyle | None = None,
+        config: GenerationConfig | None = None,
     ) -> list[Path]:
         """Generate images for multiple cards.
 

@@ -184,7 +184,15 @@ class TestModelsFunctionality:
 
     def test_color_enum_values_are_valid(self):
         """Test that Color enum has valid MTG colors."""
-        expected_colors = {"White", "Blue", "Black", "Red", "Green", "Colorless"}
+        expected_colors = {
+            "White",
+            "Blue",
+            "Black",
+            "Red",
+            "Green",
+            "Colorless",
+            "Multicolor",
+        }
         actual_colors = {color.value for color in Color}
 
         assert actual_colors == expected_colors
@@ -219,7 +227,7 @@ class TestModelsFunctionality:
 
     def test_card_rarity_values(self):
         """Test that rarity has valid values."""
-        valid_rarities = ["Common", "Uncommon", "Rare", "Mythic Rare"]
+        valid_rarities = ["Common", "Uncommon", "Rare", "Mythic"]
 
         for rarity in valid_rarities:
             card = Card(
