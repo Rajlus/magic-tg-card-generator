@@ -34,7 +34,7 @@ def main():
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/dragon_default.json"),
+        default=Path("configs/image_generation/default_image.json"),
         help="Path to configuration file",
     )
     parser.add_argument(
@@ -112,25 +112,25 @@ def main():
 
     # Generate image
     console.print(f"\n[blue]Generating image for {card.name}...[/blue]")
-    
+
     try:
         if custom_prompt:
             console.print(f"[dim]Using custom prompt: {custom_prompt[:100]}...[/dim]")
         else:
             console.print(f"[dim]Using auto-generated prompt based on card attributes[/dim]")
-            
+
         image_path = generator.generate_card_art(
             card=card,
             custom_prompt=custom_prompt,
         )
-        
+
         console.print(f"[green]✓[/green] Image saved to: {image_path}")
-        
+
         # Show metadata
         metadata_path = image_path.with_suffix(".json")
         if metadata_path.exists():
             console.print(f"[green]✓[/green] Metadata saved to: {metadata_path}")
-            
+
     except Exception as e:
         console.print(f"[red]✗ Error generating image: {e}[/red]")
         return 1

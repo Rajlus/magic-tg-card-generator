@@ -63,7 +63,10 @@ class TestGenerateImage:
     @patch("magic_tg_card_generator.generate_image.ImageGenerator")
     def test_generate_with_config_file(self, mock_generator, tmp_path):
         """Test generation with config file."""
-        config_file = tmp_path / "test_config.json"
+        # Create nested directory structure
+        config_dir = tmp_path / "configs" / "image_generation"
+        config_dir.mkdir(parents=True)
+        config_file = config_dir / "test_config.json"
         config_data = {
             "image_generation": {"model": "SDXL_LOCAL"},
             "generation_params": {"steps": 50, "guidance_scale": 8.0},

@@ -7,7 +7,7 @@
     "low_memory": true
   },
   "generation_params": {
-    "steps": 30,
+    "steps": 25,
     "guidance_scale": 7.5,
     "width": 1152,
     "height": 896,
@@ -17,7 +17,7 @@
   "output_settings": {
     "output_dir": "output/images",
     "save_metadata": true,
-    "image_format": "png"
+    "image_format": "jpg"
   },
   "default_prompts": {
     "negative_prompt": "low quality, blurry, pixelated, text, watermark, signature, extra limbs, deformed, ugly, bad anatomy, wrong proportions, mutated, disfigured, poorly drawn, bad art",

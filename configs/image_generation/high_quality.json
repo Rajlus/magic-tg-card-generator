@@ -1,0 +1,32 @@
+{
+  "image_generation": {
+    "model": "SDXL_BASE",
+    "device": "auto",
+    "dtype": "auto",
+    "low_memory": false
+  },
+  "generation_params": {
+    "steps": 50,
+    "guidance_scale": 8.5,
+    "width": 1024,
+    "height": 1024,
+    "seed": null,
+    "batch_size": 1
+  },
+  "output_settings": {
+    "output_dir": "output/high_quality",
+    "save_metadata": true,
+    "image_format": "png"
+  },
+  "default_prompts": {
+    "negative_prompt": "low quality, blurry, pixelated, text, watermark, signature, extra limbs, deformed, ugly, bad anatomy, wrong proportions, mutated, disfigured, poorly drawn, bad art, amateur, low resolution, compressed, jpeg artifacts",
+    "style_suffix": "masterpiece, best quality, ultra-detailed, 8k resolution, professional artwork, award winning, trending on artstation"
+  },
+  "art_styles": {
+    "fantasy_realism": "fantasy realism style, oil painting, Renaissance art, detailed brushwork, classical composition",
+    "digital_art": "digital art style, modern illustration, vibrant colors, clean lines, professional digital painting",
+    "comic_book": "comic book style, bold lines, dynamic composition, superhero art, action pose",
+    "watercolor": "watercolor painting style, soft edges, flowing colors, artistic, traditional media",
+    "dark_fantasy": "dark fantasy style, gothic atmosphere, dramatic shadows, moody lighting, grim dark"
+  }
+}
