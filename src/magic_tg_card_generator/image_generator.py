@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
@@ -66,7 +66,8 @@ class ImageGenerator:
 
     def __init__(
         self,
-        model: ModelConfig = ModelConfig.SD_1_5,
+        config_file: Optional[Path] = None,
+        model: Optional[ModelConfig] = None,
         models_dir: Optional[Path] = None,
         output_dir: Optional[Path] = None,
         device: Optional[str] = None,
@@ -75,24 +76,55 @@ class ImageGenerator:
         """Initialize the image generator.
 
         Args:
-            model: Model configuration to use
+            config_file: Path to JSON configuration file
+            model: Model configuration to use (overrides config file)
             models_dir: Directory to cache downloaded models
             output_dir: Directory to save generated images
             device: Device to run on ('cuda', 'mps', 'cpu', or None for auto)
             low_memory: Enable memory optimizations for low VRAM systems
         """
-        self.output_dir = output_dir or Path("output/images")
+        # Load configuration from file if provided
+        self.config = self._load_config(config_file) if config_file else {}
+        
+        # Set up directories
+        self.output_dir = output_dir or Path(self.config.get('output_settings', {}).get('output_dir', 'output/images'))
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.models_dir = models_dir or Path("models")
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
-        self.model_config = model
-        self.device = self._setup_device(device)
-        self.low_memory = low_memory
+        # Model configuration
+        if model:
+            self.model_config = model
+        elif 'image_generation' in self.config:
+            model_name = self.config['image_generation'].get('model', 'SD_1_5')
+            self.model_config = ModelConfig[model_name] if isinstance(model_name, str) else ModelConfig.SD_1_5
+        else:
+            self.model_config = ModelConfig.SD_1_5
+            
+        self.device = self._setup_device(device or self.config.get('image_generation', {}).get('device'))
+        self.low_memory = low_memory or self.config.get('image_generation', {}).get('low_memory', False)
         self.pipeline: Optional[StableDiffusionPipeline] = None
 
-        logger.info(f"ImageGenerator initialized with {model.value} on {self.device}")
+        logger.info(f"ImageGenerator initialized with {self.model_config.value} on {self.device}")
+    
+    def _load_config(self, config_file: Path) -> Dict[str, Any]:
+        """Load configuration from JSON file.
+        
+        Args:
+            config_file: Path to configuration file
+            
+        Returns:
+            Configuration dictionary
+        """
+        if not config_file.exists():
+            logger.warning(f"Config file {config_file} not found, using defaults")
+            return {}
+            
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+            logger.info(f"Loaded configuration from {config_file}")
+            return config
 
     def _setup_device(self, device: Optional[str]) -> str:
         """Determine the best device to use for generation.
@@ -200,6 +232,7 @@ class ImageGenerator:
         card: Card,
         style: Optional[ArtStyle] = None,
         config: Optional[GenerationConfig] = None,
+        custom_prompt: Optional[str] = None,
     ) -> Path:
         """Generate artwork for a Magic card.
 
@@ -207,6 +240,7 @@ class ImageGenerator:
             card: The card to generate art for
             style: Art style to use (defaults to OIL_PAINTING)
             config: Generation configuration
+            custom_prompt: Custom prompt to use instead of auto-generated one
 
         Returns:
             Path to the generated image
@@ -214,12 +248,31 @@ class ImageGenerator:
         if style is None:
             style = ArtStyle.OIL_PAINTING
         if config is None:
-            config = GenerationConfig()
+            # Load generation params from config if available
+            if 'generation_params' in self.config:
+                params = self.config['generation_params']
+                config = GenerationConfig(
+                    num_inference_steps=params.get('steps', 30),
+                    guidance_scale=params.get('guidance_scale', 7.5),
+                    height=params.get('height', 512),
+                    width=params.get('width', 512),
+                    seed=params.get('seed'),
+                    negative_prompt=self.config.get('default_prompts', {}).get('negative_prompt')
+                )
+            else:
+                config = GenerationConfig()
+                
         if not self.pipeline:
             self.load_model()
 
-        # Build prompt based on card
-        prompt = self._build_prompt(card, style)
+        # Use custom prompt or build from card
+        if custom_prompt:
+            prompt = custom_prompt
+            # Add style suffix from config if available
+            if 'default_prompts' in self.config and 'style_suffix' in self.config['default_prompts']:
+                prompt = f"{prompt}, {self.config['default_prompts']['style_suffix']}"
+        else:
+            prompt = self._build_prompt(card, style)
 
         logger.info(f"Generating image for {card.name} with prompt: {prompt[:100]}...")
 

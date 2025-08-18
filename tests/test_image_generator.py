@@ -111,6 +111,21 @@ class TestGenerationConfig:
 class TestImageGenerator:
     """Test suite for ImageGenerator class."""
 
+    def test_init_with_config_file(self, tmp_path):
+        """Test ImageGenerator initialization with config file."""
+        config_file = tmp_path / "config.json"
+        config_data = {
+            "image_generation": {"model": "SDXL_BASE", "low_memory": True},
+            "output_settings": {"output_dir": "custom/output"},
+        }
+        config_file.write_text(json.dumps(config_data))
+
+        generator = ImageGenerator(config_file=config_file)
+
+        assert generator.model_config == ModelConfig.SDXL_BASE
+        assert generator.low_memory is True
+        assert generator.config == config_data
+
     def test_init_creates_directories(self, tmp_path):
         """Test that initialization creates necessary directories."""
         output_dir = tmp_path / "output"
@@ -209,6 +224,28 @@ class TestImageGenerator:
         assert "Lightning Bolt" in prompt
         assert "fiery" in prompt
         assert "digital art" in prompt.lower()
+
+    def test_generate_with_custom_prompt(self, sample_card):
+        """Test generation with custom prompt."""
+        generator = ImageGenerator()
+        generator.pipeline = MagicMock()
+
+        custom_prompt = "A majestic dragon soaring through storm clouds"
+        
+        with patch.object(generator, "_save_image") as mock_save:
+            mock_save.return_value = Path("test.png")
+            with patch.object(generator, "_add_card_frame") as mock_frame:
+                mock_frame.return_value = MagicMock()
+                
+                generator.generate_card_art(
+                    sample_card, 
+                    custom_prompt=custom_prompt
+                )
+                
+        # Verify custom prompt was used
+        generator.pipeline.assert_called_once()
+        call_args = generator.pipeline.call_args
+        assert custom_prompt in call_args[1]["prompt"]
 
     def test_build_prompt_colorless(self):
         """Test prompt building for colorless cards."""

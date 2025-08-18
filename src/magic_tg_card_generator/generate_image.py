@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Standalone script to generate images with Magic card generator."""
+
+import argparse
+import logging
+from pathlib import Path
+
+from rich.console import Console
+from rich.prompt import Prompt
+
+from magic_tg_card_generator.image_generator import (
+    ArtStyle,
+    GenerationConfig,
+    ImageGenerator,
+    ModelConfig,
+)
+from magic_tg_card_generator.models import Card, CardType, Color
+
+console = Console()
+
+
+def setup_logging(verbose: bool = False):
+    """Set up logging configuration."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+
+def main():
+    """Main function for image generation."""
+    parser = argparse.ArgumentParser(description="Generate Magic card artwork")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/dragon_default.json"),
+        help="Path to configuration file",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        help="Custom prompt for image generation (optional)",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="Custom Card",
+        help="Card name",
+    )
+    parser.add_argument(
+        "--type",
+        type=str,
+        choices=[t.value for t in CardType],
+        default="Creature",
+        help="Card type",
+    )
+    parser.add_argument(
+        "--color",
+        type=str,
+        choices=[c.value for c in Color],
+        default="Red",
+        help="Card color",
+    )
+    parser.add_argument(
+        "--power",
+        type=int,
+        help="Creature power",
+    )
+    parser.add_argument(
+        "--toughness",
+        type=int,
+        help="Creature toughness",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Interactive mode - prompt for image description",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+
+    args = parser.parse_args()
+    setup_logging(args.verbose)
+
+    # Create card
+    card = Card(
+        name=args.name,
+        card_type=CardType(args.type),
+        mana_cost="3",
+        color=Color(args.color),
+        power=args.power,
+        toughness=args.toughness,
+    )
+
+    # Initialize image generator with config
+    console.print(f"[blue]Loading configuration from {args.config}...[/blue]")
+    generator = ImageGenerator(config_file=args.config)
+
+    # Get prompt
+    custom_prompt = args.prompt
+    if args.interactive and not custom_prompt:
+        console.print("\n[yellow]Interactive Mode[/yellow]")
+        custom_prompt = Prompt.ask(
+            "[green]Was für ein Bild soll generiert werden?[/green]",
+            default=None,
+        )
+
+    # Generate image
+    console.print(f"\n[blue]Generating image for {card.name}...[/blue]")
+    
+    try:
+        if custom_prompt:
+            console.print(f"[dim]Using custom prompt: {custom_prompt[:100]}...[/dim]")
+        else:
+            console.print(f"[dim]Using auto-generated prompt based on card attributes[/dim]")
+            
+        image_path = generator.generate_card_art(
+            card=card,
+            custom_prompt=custom_prompt,
+        )
+        
+        console.print(f"[green]✓[/green] Image saved to: {image_path}")
+        
+        # Show metadata
+        metadata_path = image_path.with_suffix(".json")
+        if metadata_path.exists():
+            console.print(f"[green]✓[/green] Metadata saved to: {metadata_path}")
+            
+    except Exception as e:
+        console.print(f"[red]✗ Error generating image: {e}[/red]")
+        return 1
+    finally:
+        # Clean up
+        if generator.pipeline:
+            generator.unload_model()
+            console.print("[dim]Model unloaded[/dim]")
+
+    return 0
+
+
+if __name__ == "__main__":
+    exit(main())

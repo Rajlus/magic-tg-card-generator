@@ -6,6 +6,10 @@ authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 packages = [{include = "magic_tg_card_generator", from = "src"}]
 
+[tool.poetry.scripts]
+mtg-generate = "magic_tg_card_generator.cli:main"
+mtg-image = "magic_tg_card_generator.generate_image:main"
+
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic = "^2.5.0"
