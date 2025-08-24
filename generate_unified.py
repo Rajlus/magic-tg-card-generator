@@ -32,6 +32,17 @@ class UnifiedImageGenerator:
         self.config = self._load_config(config_path)
         self.mode = None
         self.generator = None
+        self.api_model = None
+
+        # Define API model mappings
+        self.api_models = {
+            "flux-schnell": "black-forest-labs/flux-schnell",
+            "flux-dev": "black-forest-labs/flux-dev",
+            "flux-pro": "black-forest-labs/flux-pro",
+            "sdxl": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+            "sdxl-lightning": "bytedance/sdxl-lightning-4step:727e49a643e999d602a896c774a0658ffefea21465756a6ce24b7ea4165eba6a",
+            "stability-ai/sdxl-turbo": "stability-ai/sdxl-turbo",
+        }
 
     def _load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file."""
@@ -94,14 +105,7 @@ class UnifiedImageGenerator:
                 model or self.config["image_generation"]["api"]["default_model"]
             )
 
-            # Model mappings for Replicate
-            self.api_models = {
-                "flux-schnell": "black-forest-labs/flux-schnell",
-                "flux-dev": "black-forest-labs/flux-dev",
-                "flux-pro": "black-forest-labs/flux-pro",
-                "sdxl": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-                "sdxl-lightning": "bytedance/sdxl-lightning-4step:727e49a643e999d602a896c774a0658ffefea21465756a6ce24b7ea4165eba6a",
-            }
+            # Model mappings are already defined in __init__
 
             logger.info(f"API mode initialized with model: {self.api_model}")
 

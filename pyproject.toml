@@ -28,6 +28,7 @@ sentencepiece = "^0.2.1"
 protobuf = "^6.32.0"
 replicate = "^1.0.7"
 pyyaml = "^6.0.2"
+playwright = "^1.54.0"
 
 [[tool.poetry.source]]
 name = "pytorch"
@@ -86,6 +87,15 @@ ignore = [
     "E501",  # line too long, handled by black
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
+    "E402",  # module level import not at top of file
+    "E722",  # do not use bare except
+    "UP007", # use X | Y for type annotations
+    "ARG002", # unused method argument
+    "F401",  # imported but unused
+    "F811",  # redefinition of unused
+    "F841",  # local variable assigned but never used
+    "SIM102", # use single if instead of nested
+    "SIM108", # use ternary operator
 ]
 
 [tool.ruff.isort]
