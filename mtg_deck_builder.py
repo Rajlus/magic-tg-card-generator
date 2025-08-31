@@ -58,6 +58,7 @@ from src.managers.card_generation_controller import (
     CardGeneratorWorker,
 )
 from src.managers.card_table_manager import CardTableManager
+from src.managers.card_validation_manager import CardValidationManager
 
 load_dotenv()
 
@@ -870,6 +871,11 @@ class CardManagementTab(QWidget):
         # Initialize file operations manager
         self.file_operations = CardFileOperations(self, logger=self._create_logger())
 
+        # Initialize validation manager
+        self.validation_manager = CardValidationManager(
+            self.cards, logger=self._create_logger()
+        )
+
     def _create_logger(self):
         """Create a logger compatible with CardFileOperations."""
 
@@ -1329,9 +1335,6 @@ class CardManagementTab(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         self.setLayout(main_layout)
 
-        # Store commander colors for validation
-        self.commander_colors = set()
-
     def _setup_table_manager(self):
         """Initialize and configure the table manager."""
         # Create the table manager
@@ -1386,104 +1389,6 @@ class CardManagementTab(QWidget):
     # Sorting method removed - was broken
     # def sort_by_column(self, column: int):
     #     pass
-
-    def get_commander_colors(self) -> set:
-        """Get the color identity of the commander (first card or legendary creature)"""
-        commander_colors = set()
-
-        # Get main window for logging
-        main_window = self.parent().parent() if hasattr(self, "parent") else None
-
-        for card in self.cards:
-            # Commander is usually the first card or a legendary creature
-            if card.id == 1 or ("Legendary" in card.type and "Creature" in card.type):
-                if main_window and hasattr(main_window, "log_message"):
-                    main_window.log_message(
-                        "DEBUG",
-                        f"Found potential commander: {card.name} (ID: {card.id}, Cost: {card.cost})",
-                    )
-
-                if card.cost and card.cost != "-":
-                    # Convert to string first to handle integer costs
-                    cost = str(card.cost).upper()
-                    # Extract colors from mana cost
-                    for color in ["W", "U", "B", "R", "G"]:
-                        if color in cost:
-                            commander_colors.add(color)
-
-                    # Also check card text for color indicators
-                    if card.text:
-                        text = card.text.upper()
-                        # Check for hybrid mana symbols
-                        for hybrid in [
-                            "{W/U}",
-                            "{U/B}",
-                            "{B/R}",
-                            "{R/G}",
-                            "{G/W}",
-                            "{W/B}",
-                            "{U/R}",
-                            "{B/G}",
-                            "{R/W}",
-                            "{G/U}",
-                        ]:
-                            if hybrid in text:
-                                for color in ["W", "U", "B", "R", "G"]:
-                                    if color in hybrid:
-                                        commander_colors.add(color)
-
-                # If this is card ID 1, it's definitely the commander
-                if card.id == 1:
-                    if main_window and hasattr(main_window, "log_message"):
-                        main_window.log_message(
-                            "INFO",
-                            f"Commander identified: {card.name} with colors: {commander_colors}",
-                        )
-                    break
-
-        return commander_colors
-
-    def check_color_violation(self, card_cost: str) -> bool:
-        """Check if a card's mana cost violates commander color identity"""
-        # Handle different types of cost input
-        if card_cost is None:
-            return False
-
-        # Convert to string if it's not already
-        cost_str = str(card_cost) if not isinstance(card_cost, str) else card_cost
-
-        if not cost_str or cost_str == "-" or cost_str == "":
-            return False  # Colorless cards are always legal
-
-        if not self.commander_colors:
-            return False  # No commander colors set yet
-
-        card_colors = set()
-        # Clean up the cost string (remove curly braces) - ensure it's a string first
-        if hasattr(cost_str, "upper"):
-            cost = cost_str.upper().replace("{", "").replace("}", "")
-        else:
-            # If for some reason upper() doesn't exist, convert to string first
-            cost = str(cost_str).upper().replace("{", "").replace("}", "")
-
-        # Extract colors from the card's mana cost
-        for color in ["W", "U", "B", "R", "G"]:
-            if color in cost:
-                card_colors.add(color)
-
-        # Check if any card color is not in commander colors
-        violation = bool(card_colors - self.commander_colors)
-
-        # Debug log for problematic cards
-        if violation and card_colors:
-            main_window = self.parent().parent() if hasattr(self, "parent") else None
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "DEBUG",
-                    f"Color violation: Card has {card_colors}, Commander allows {self.commander_colors}",
-                )
-
-        return violation
 
     def load_deck(self):
         """Open file dialog to load a deck"""
@@ -2253,7 +2158,10 @@ class CardManagementTab(QWidget):
     def load_cards(self, cards: list[MTGCard]):
         """Load cards into table"""
         self.cards = cards
-        self.commander_colors = self.get_commander_colors()
+
+        # Update validation manager with new cards
+        self.validation_manager.update_cards(self.cards)
+        commander_colors = self.validation_manager.commander_colors
 
         # Synchronize card status based on whether they have generated images
         # Status should match whether the card has been generated
@@ -2272,11 +2180,11 @@ class CardManagementTab(QWidget):
                     card.status = "pending"
 
         # Log all cards with color violations
-        self.log_color_violations()
+        self.validation_manager.log_color_violations()
 
         # Update the table manager with new cards and commander colors
         self.table_manager.set_cards(self.cards)
-        self.table_manager.set_commander_colors(self.commander_colors)
+        self.table_manager.set_commander_colors(commander_colors)
         self.update_stats()
         self.update_generation_stats()
 
@@ -2286,38 +2194,6 @@ class CardManagementTab(QWidget):
         self._sync_file_operations_with_main_window()
         # Use the file operations manager to sync card status
         self.file_operations.sync_card_status_with_files(self.cards)
-
-    def log_color_violations(self):
-        """Log all cards that violate commander color identity"""
-        main_window = self.parent().parent() if hasattr(self, "parent") else None
-        if not main_window or not hasattr(main_window, "log_message"):
-            return
-
-        violations = []
-        for card in self.cards:
-            if self.check_color_violation(card.cost):
-                # Get the card's colors
-                card_colors = set()
-                cost_str = str(card.cost) if card.cost else ""
-                # Ensure it's a string before calling upper()
-                cost = str(cost_str).upper().replace("{", "").replace("}", "")
-                for color in ["W", "U", "B", "R", "G"]:
-                    if color in str(cost):  # Ensure cost is string
-                        card_colors.add(color)
-
-                violations.append(
-                    f"{card.name} (Cost: {card.cost}, Colors: {card_colors})"
-                )
-
-        if violations:
-            main_window.log_message(
-                "WARNING", f"Found {len(violations)} cards with color violations:"
-            )
-            for violation in violations:
-                main_window.log_message("WARNING", f"   {violation}")
-            main_window.log_message(
-                "INFO", f"Commander colors allowed: {self.commander_colors}"
-            )
 
     def update_generation_stats(self):
         """Update the generation progress indicator"""
