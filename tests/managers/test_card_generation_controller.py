@@ -644,7 +644,9 @@ class TestCardGenerationController(unittest.TestCase):
     def test_generate_failed_cards_none_failed(self):
         """Test generating failed cards when none have failed."""
         # No failed cards
-        no_failed_cards = [card for card in self.test_cards if card.status != "failed"]
+        no_failed_cards = list(
+            card for card in self.test_cards if card.status != "failed"
+        )
 
         result = self.controller.generate_failed_cards(no_failed_cards)
         self.assertFalse(result)
@@ -733,34 +735,33 @@ class TestCardGenerationController(unittest.TestCase):
         # Test card image generation
         with patch.object(
             self.controller, "_generate_card_image", return_value=True
-        ) as mock_card:
-            with patch.object(
-                self.controller, "_generate_artwork_image", return_value=True
-            ) as mock_artwork:
-                # Test different generation modes
-                self.controller._current_generation = GenerationMode.CARDS_ONLY
-                result = self.controller._generate_single_card(card)
-                self.assertTrue(result)
-                mock_card.assert_called_once_with(card)
-                mock_artwork.assert_not_called()
+        ) as mock_card, patch.object(
+            self.controller, "_generate_artwork_image", return_value=True
+        ) as mock_artwork:
+            # Test different generation modes
+            self.controller._current_generation = GenerationMode.CARDS_ONLY
+            result = self.controller._generate_single_card(card)
+            self.assertTrue(result)
+            mock_card.assert_called_once_with(card)
+            mock_artwork.assert_not_called()
 
-                mock_card.reset_mock()
-                mock_artwork.reset_mock()
+            mock_card.reset_mock()
+            mock_artwork.reset_mock()
 
-                self.controller._current_generation = GenerationMode.ARTWORK_ONLY
-                result = self.controller._generate_single_card(card)
-                self.assertTrue(result)
-                mock_card.assert_not_called()
-                mock_artwork.assert_called_once_with(card)
+            self.controller._current_generation = GenerationMode.ARTWORK_ONLY
+            result = self.controller._generate_single_card(card)
+            self.assertTrue(result)
+            mock_card.assert_not_called()
+            mock_artwork.assert_called_once_with(card)
 
-                mock_card.reset_mock()
-                mock_artwork.reset_mock()
+            mock_card.reset_mock()
+            mock_artwork.reset_mock()
 
-                self.controller._current_generation = GenerationMode.COMPLETE
-                result = self.controller._generate_single_card(card)
-                self.assertTrue(result)
-                mock_card.assert_called_once_with(card)
-                mock_artwork.assert_called_once_with(card)
+            self.controller._current_generation = GenerationMode.COMPLETE
+            result = self.controller._generate_single_card(card)
+            self.assertTrue(result)
+            mock_card.assert_called_once_with(card)
+            mock_artwork.assert_called_once_with(card)
 
     # Tests for Context Manager
 
