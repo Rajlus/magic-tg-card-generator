@@ -1921,6 +1921,22 @@ class CardManagementTab(QWidget):
 
         return violation
 
+    def get_selected_rows(self) -> set[int]:
+        """
+        Get the set of currently selected row indices from the table.
+
+        Returns:
+            set[int]: A set containing the row indices of all selected items.
+                     Returns an empty set if no rows are selected.
+
+        Example:
+            selected_rows = self.get_selected_rows()
+            if not selected_rows:
+                QMessageBox.warning(self, "No Selection", "Please select cards!")
+                return
+        """
+        return {item.row() for item in self.table.selectedItems()}
+
     def load_deck(self):
         """Open file dialog to load a deck"""
         self.load_deck_file()
@@ -2277,9 +2293,7 @@ class CardManagementTab(QWidget):
 
     def update_button_visibility(self):
         """Update visibility of buttons based on selection"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         # Check status of selected cards
         has_generated = False
@@ -2538,9 +2552,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_cards(self):
         """Delete selected cards from the deck"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards to delete!")
@@ -2564,9 +2576,7 @@ class CardManagementTab(QWidget):
 
     def edit_card(self):
         """Edit selected card details including art description"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select a card to edit!")
@@ -2677,9 +2687,7 @@ class CardManagementTab(QWidget):
 
     def edit_selected_art_prompt(self):
         """Edit art prompt for selected card"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select a card!")
@@ -2790,9 +2798,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_with_image(self):
         """Regenerate selected cards with new images"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -2828,9 +2834,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_card_only(self):
         """Regenerate selected cards using existing artwork"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -2943,9 +2947,7 @@ class CardManagementTab(QWidget):
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -3001,9 +3003,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_files(self):
         """Delete generated files for selected cards"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -3727,9 +3727,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_cards(self):
         """Delete selected cards from the deck"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards to delete")
@@ -3879,9 +3877,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_with_image(self):
         """Regenerate selected cards with new images"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -3917,9 +3913,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_card_only(self):
         """Regenerate selected cards using existing artwork"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -4032,9 +4026,7 @@ class CardManagementTab(QWidget):
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -4090,9 +4082,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_files(self):
         """Delete generated files for selected cards"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -4279,9 +4269,7 @@ class CardManagementTab(QWidget):
 
     def generate_selected_cards(self):
         """Generate only selected cards"""
-        selected_rows = set()
-        for item in self.table.selectedItems():
-            selected_rows.add(item.row())
+        selected_rows = self.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
