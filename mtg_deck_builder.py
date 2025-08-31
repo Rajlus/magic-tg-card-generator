@@ -52,6 +52,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+# Import domain model - this provides backward compatibility for any code importing from this module
+from src.domain.models import (
+    MTGCard,
+    convert_mana_cost,
+    escape_for_shell,
+    make_safe_filename,
+)
 from src.managers.card_crud_manager import CardCRUDManager
 from src.managers.card_file_operations import CardFileOperations
 from src.managers.card_generation_controller import (
@@ -62,11 +69,8 @@ from src.managers.card_status_manager import CardStatusManager
 from src.managers.card_table_manager import CardTableManager
 from src.managers.card_validation_manager import CardValidationManager
 
-# Import domain model - this provides backward compatibility for any code importing from this module
-from src.domain.models import MTGCard, make_safe_filename, escape_for_shell, convert_mana_cost
-
 # Export for backward compatibility
-__all__ = ['MTGCard', 'make_safe_filename', 'escape_for_shell', 'convert_mana_cost']
+__all__ = ["MTGCard", "make_safe_filename", "escape_for_shell", "convert_mana_cost"]
 
 load_dotenv()
 
@@ -1782,9 +1786,14 @@ class CardManagementTab(QWidget):
         )
 
         if image_path:
+            # Get cards from CRUD manager
+            cards_list = (
+                self.crud_manager.cards if hasattr(self, "crud_manager") else self.cards
+            )
+
             for row in selected_rows:
-                if 0 <= row < len(self.cards):
-                    card = self.cards[row]
+                if 0 <= row < len(cards_list):
+                    card = cards_list[row]
                     card.custom_image_path = image_path
                     card.status = "pending"
 
@@ -1795,8 +1804,15 @@ class CardManagementTab(QWidget):
 
             # Generate cards with custom image
             cards_with_custom = [
-                self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+                cards_list[row] for row in selected_rows if 0 <= row < len(cards_list)
             ]
+
+            # Log the generation start
+            if parent and hasattr(parent, "log_message"):
+                parent.log_message(
+                    "GENERATING",
+                    f"Starting image generation for {len(cards_with_custom)} cards...",
+                )
 
             # Get deck name from parent
             deck_name = None
@@ -2061,9 +2077,14 @@ class CardManagementTab(QWidget):
         )
 
         if image_path:
+            # Get cards from CRUD manager
+            cards_list = (
+                self.crud_manager.cards if hasattr(self, "crud_manager") else self.cards
+            )
+
             for row in selected_rows:
-                if 0 <= row < len(self.cards):
-                    card = self.cards[row]
+                if 0 <= row < len(cards_list):
+                    card = cards_list[row]
                     card.custom_image_path = image_path
                     card.status = "pending"
 
@@ -2074,8 +2095,15 @@ class CardManagementTab(QWidget):
 
             # Generate cards with custom image
             cards_with_custom = [
-                self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+                cards_list[row] for row in selected_rows if 0 <= row < len(cards_list)
             ]
+
+            # Log the generation start
+            if parent and hasattr(parent, "log_message"):
+                parent.log_message(
+                    "GENERATING",
+                    f"Starting image generation for {len(cards_with_custom)} cards...",
+                )
 
             # Get deck name from parent
             deck_name = None
@@ -2228,9 +2256,14 @@ class CardManagementTab(QWidget):
 
     def generate_all_cards(self):
         """Generate all pending cards"""
+        # Get cards from CRUD manager
+        cards_list = (
+            self.crud_manager.cards if hasattr(self, "crud_manager") else self.cards
+        )
+
         pending_cards = [
             card
-            for card in self.cards
+            for card in cards_list
             if not hasattr(card, "status") or card.status == "pending"
         ]
 
@@ -2264,10 +2297,15 @@ class CardManagementTab(QWidget):
             )
             return
 
+        # Get cards from CRUD manager
+        cards_list = (
+            self.crud_manager.cards if hasattr(self, "crud_manager") else self.cards
+        )
+
         cards_to_generate = []
         for row in selected_rows:
-            if 0 <= row < len(self.cards):
-                card = self.cards[row]
+            if 0 <= row < len(cards_list):
+                card = cards_list[row]
                 if not hasattr(card, "status") or card.status == "pending":
                     cards_to_generate.append(card)
 
@@ -2504,9 +2542,10 @@ class MTGDeckBuilder(QMainWindow):
         self.cards_tab.cards_updated.connect(self.on_cards_updated)
         self.cards_tab.regenerate_card.connect(self.on_regenerate_single_card)
 
-        # Connect card selection signals for preview
-        self.cards_tab.table.itemSelectionChanged.connect(
-            self.on_card_selection_changed_in_table
+        # Connect card selection signal for preview
+        # Use currentItemChanged as it's most reliable for single selection
+        self.cards_tab.table.currentItemChanged.connect(
+            lambda *_: self.on_card_selection_changed_in_table()
         )
         # Connect queue table selection if it exists
         if hasattr(self.cards_tab, "queue_table"):
@@ -3293,13 +3332,36 @@ class MTGDeckBuilder(QMainWindow):
     def on_card_selection_changed_in_table(self):
         """Handle card selection in Card Management table"""
         current_row = self.cards_tab.table.currentRow()
-        if (
-            current_row >= 0
-            and hasattr(self.cards_tab, "cards")
-            and current_row < len(self.cards_tab.cards)
+
+        # Cards are stored in the CRUD manager, not directly in cards_tab
+        # Access them through the crud_manager
+        cards_list = None
+        if hasattr(self.cards_tab, "crud_manager") and hasattr(
+            self.cards_tab.crud_manager, "cards"
         ):
-            card = self.cards_tab.cards[current_row]
+            cards_list = self.cards_tab.crud_manager.cards
+        elif hasattr(self.cards_tab, "cards"):
+            # Fallback to direct cards attribute if it exists
+            cards_list = self.cards_tab.cards
+
+        if not cards_list:
+            self.log_message("DEBUG", "No cards found in cards_tab or crud_manager")
+            return
+
+        total_cards = len(cards_list)
+        self.log_message(
+            "DEBUG",
+            f"Table selection changed to row: {current_row} (total cards: {total_cards})",
+        )
+
+        if current_row >= 0 and current_row < total_cards:
+            card = cards_list[current_row]
+            self.log_message("DEBUG", f"Updating preview for card: {card.name}")
             self.update_card_preview(card)
+        else:
+            self.log_message(
+                "DEBUG", f"Row {current_row} is out of range (0-{total_cards-1})"
+            )
 
     def on_card_selection_changed_in_generation(self):
         """Handle card selection in Generation Tab table"""
@@ -3309,8 +3371,18 @@ class MTGDeckBuilder(QMainWindow):
 
         if selected_rows:
             row = min(selected_rows)  # Get first selected row
-            if 0 <= row < len(self.cards_tab.cards):
-                card = self.cards_tab.cards[row]
+
+            # Get cards from CRUD manager or cards_tab
+            cards_list = None
+            if hasattr(self.cards_tab, "crud_manager") and hasattr(
+                self.cards_tab.crud_manager, "cards"
+            ):
+                cards_list = self.cards_tab.crud_manager.cards
+            elif hasattr(self.cards_tab, "cards"):
+                cards_list = self.cards_tab.cards
+
+            if cards_list and 0 <= row < len(cards_list):
+                card = cards_list[row]
                 self.update_card_preview(card)
 
     def resizeEvent(self, event):
@@ -3409,14 +3481,22 @@ class MTGDeckBuilder(QMainWindow):
 
     def update_card_images(self, card: MTGCard):
         """Update the card image previews"""
-        # Get main window safely
-        main_window = get_main_window()
+        # Clear previous image first to ensure update is visible
+        self.card_image_label.clear()
+        self.card_image_label.setText("Loading...")
 
-        # Log what we're trying to load (only if main window found)
-        if main_window and hasattr(main_window, "log_message"):
-            main_window.log_message("DEBUG", f"Updating preview for card: {card.name}")
-            main_window.log_message("DEBUG", f"Card path: {card.card_path}")
-            main_window.log_message("DEBUG", f"Image path: {card.image_path}")
+        # Process events to show the loading state immediately
+        QApplication.processEvents()
+
+        # Log what we're trying to load
+        self.log_message("DEBUG", f"Updating image preview for card: {card.name}")
+        self.log_message(
+            "DEBUG", f"Card path: {card.card_path if card.card_path else 'None'}"
+        )
+        self.log_message(
+            "DEBUG",
+            f"Image path: {card.image_path if hasattr(card, 'image_path') and card.image_path else 'None'}",
+        )
 
         # Full card image
         card_file = None
@@ -3428,26 +3508,21 @@ class MTGDeckBuilder(QMainWindow):
                 card_file = self._find_card_image(safe_name)
                 if card_file:
                     card.card_path = str(card_file)  # Update the card object
-                    if main_window and hasattr(main_window, "log_message"):
-                        main_window.log_message(
-                            "DEBUG", f"Found card in output directory: {card_file}"
-                        )
+                    self.log_message(
+                        "DEBUG", f"Found card in output directory: {card_file}"
+                    )
         else:
             # No card_path set, try to find it
             safe_name = make_safe_filename(card.name)
             card_file = self._find_card_image(safe_name)
             if card_file:
                 card.card_path = str(card_file)  # Update the card object
-                if main_window and hasattr(main_window, "log_message"):
-                    main_window.log_message(
-                        "DEBUG", f"Found card in output directory: {card_file}"
-                    )
+                self.log_message(
+                    "DEBUG", f"Found card in output directory: {card_file}"
+                )
 
         if card_file and card_file.exists():
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "DEBUG", f"Loading card image from: {card_file}"
-                )
+            self.log_message("DEBUG", f"Loading card image from: {card_file}")
             pixmap = QPixmap(str(card_file))
             if not pixmap.isNull():
                 # Get the available space in the preview widget
@@ -3478,18 +3553,12 @@ class MTGDeckBuilder(QMainWindow):
                 )
             else:
                 self.card_image_label.setText("Card image failed to load")
-                if main_window and hasattr(main_window, "log_message"):
-                    main_window.log_message(
-                        "ERROR", "QPixmap failed to load card image"
-                    )
+                self.log_message("ERROR", "QPixmap failed to load card image")
         else:
             self.card_image_label.setText(
                 f"Card image not available\n\n{card.name}\n{card.type}"
             )
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "WARNING", f"No card image found for {card.name}"
-                )
+            self.log_message("DEBUG", f"No card image found for {card.name}")
 
     def _find_card_image(self, safe_name: str) -> Path:
         """Find card image in output directories, handling timestamp patterns"""
@@ -3570,7 +3639,14 @@ class MTGDeckBuilder(QMainWindow):
         self.update_status("ready", "")
         self.log_message("SUCCESS", "Image generation complete!")
 
-    def on_card_generation_completed(self, card_id, success: bool, message: str):
+    def on_card_generation_completed(
+        self,
+        card_id,
+        success: bool,
+        message: str,
+        image_path: str = "",
+        card_path: str = "",
+    ):
         """Handle individual card completion"""
         # Debug to understand ID issues
         self.log_message(
@@ -3579,6 +3655,42 @@ class MTGDeckBuilder(QMainWindow):
         )
         if success:
             self.log_message("SUCCESS", f"Card {card_id} generated successfully")
+
+            # Update the card's paths if provided
+            if hasattr(self.cards_tab, "crud_manager") and self.cards_tab.crud_manager:
+                cards_list = self.cards_tab.crud_manager.cards
+                card_updated = False
+                for card in cards_list:
+                    if str(card.id) == str(card_id):
+                        # Update the card's paths
+                        if card_path:
+                            card.card_path = card_path
+                            card_updated = True
+                        if image_path:
+                            card.image_path = image_path
+                            card_updated = True
+
+                        # Update status to completed
+                        card.status = "completed"
+                        card.generated_at = datetime.now().isoformat()
+
+                        # Check if this card is currently selected
+                        current_row = self.cards_tab.table.currentRow()
+                        if 0 <= current_row < len(cards_list):
+                            selected_card = cards_list[current_row]
+                            if selected_card.id == card.id:
+                                # This is the currently selected card, update preview
+                                self.log_message(
+                                    "DEBUG",
+                                    f"Updating preview for just-generated card: {card.name}",
+                                )
+                                self.update_card_preview(card)
+                        break
+
+                # Auto-save the deck after successful generation
+                if card_updated:
+                    self.log_message("DEBUG", "Auto-saving deck after card generation")
+                    self.auto_save_deck(cards_list, new_generation=False)
         else:
             self.log_message("ERROR", f"Card {card_id} failed: {message}")
 

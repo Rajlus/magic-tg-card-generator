@@ -27,7 +27,58 @@ from PyQt6.QtWidgets import QInputDialog, QMessageBox, QProgressBar, QWidget
 if TYPE_CHECKING:
     from src.domain.models import MTGCard
 else:
-    from src.domain.models import MTGCard, escape_for_shell, make_safe_filename
+    # Try to import from domain model first (PR branch)
+    try:
+        from src.domain.models import MTGCard, escape_for_shell, make_safe_filename
+    except ImportError:
+        # Fallback to importing from mtg_deck_builder (main branch)
+        root_path = Path(__file__).parent.parent.parent
+        if str(root_path) not in sys.path:
+            sys.path.insert(0, str(root_path))
+
+        try:
+            from mtg_deck_builder import MTGCard, escape_for_shell, make_safe_filename
+        except ImportError:
+            # Final fallback to protocol definition
+            from typing import Protocol
+
+            class MTGCard(Protocol):
+                """Protocol defining the MTGCard interface for type hints."""
+
+                id: int
+                name: str
+                type: str
+                cost: Optional[str]
+                text: Optional[str]
+                power: Optional[int]
+                toughness: Optional[int]
+                flavor: Optional[str]
+                rarity: Optional[str]
+                art: Optional[str]
+                status: str
+                image_path: Optional[str]
+                card_path: Optional[str]
+                generated_at: Optional[str]
+
+                def get_command(self, model: str, style: str) -> str:
+                    """Get the command to generate this card."""
+                    ...
+
+                def is_creature(self) -> bool:
+                    """Check if this card is a creature."""
+                    ...
+
+            # Fallback functions if import fails
+            def make_safe_filename(name: str) -> str:
+                """Convert a card name to a safe filename."""
+                return name.replace(" ", "_").replace("/", "_")
+
+            def escape_for_shell(text: str) -> str:
+                """Escape text for shell command."""
+                # Replace double quotes with escaped double quotes
+                text = str(text).replace('"', '\\"')
+                # Return with double quotes around it
+                return f'"{text}"'
 
 
 # Protocol definitions for dependency injection
@@ -317,13 +368,14 @@ class CardGeneratorWorker(QThread):
 
                 self.log_message.emit("DEBUG", f"Command: {command}")
 
-                # Execute command
+                # Execute command from project root directory
+                project_root = Path(__file__).parent.parent.parent
                 result = subprocess.run(
                     command,
                     shell=True,
                     capture_output=True,
                     text=True,
-                    cwd=os.path.dirname(os.path.abspath(__file__)),
+                    cwd=str(project_root),
                 )
 
                 # Log ALL output from the subprocess
@@ -528,7 +580,7 @@ class CardGeneratorWorker(QThread):
                     if default_card_path and default_card_path.exists():
                         # For custom images, keep the original filename from generation
                         # Don't rename to safe_name as it may not match
-                        if self.style == "custom_image":
+                        if self.theme == "custom_image" or self.style == "custom_image":
                             final_path = default_card_path
                         else:
                             # Target path without timestamp for non-custom images
@@ -629,7 +681,8 @@ class CardGeneratorWorker(QThread):
                             # For custom images, just use the path as-is
                             # For other images, rename to remove timestamp
                             if (
-                                self.style == "custom_image"
+                                self.theme == "custom_image"
+                                or self.style == "custom_image"
                                 or final_path == default_card_path
                             ):
                                 # Don't move/rename for custom images
@@ -1664,10 +1717,8 @@ class CardGenerationController(QObject):
                 and card.image_path
                 and Path(card.image_path).exists()
             ):
-                try:
+                with contextlib.suppress(Exception):
                     Path(card.image_path).unlink()
-                except:
-                    pass
 
             # Reset card status
             card.status = "pending"
