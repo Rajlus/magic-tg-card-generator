@@ -52,6 +52,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.managers.card_crud_manager import CardCRUDManager
 from src.managers.card_file_operations import CardFileOperations
 from src.managers.card_generation_controller import (
     CardGenerationController,
@@ -876,6 +877,22 @@ class CardManagementTab(QWidget):
             self.cards, logger=self._create_logger()
         )
 
+        # Initialize CRUD manager
+        self.crud_manager = CardCRUDManager(
+            parent_widget=self,
+            cards=self.cards,
+            table_manager=self.table_manager,
+            validation_manager=self.validation_manager,
+            logger=self._create_logger(),
+        )
+
+        # Connect CRUD manager signals
+        self.crud_manager.card_created.connect(self._on_card_created)
+        self.crud_manager.card_updated.connect(self._on_card_updated)
+        self.crud_manager.card_deleted.connect(self._on_card_deleted)
+        self.crud_manager.cards_loaded.connect(self._on_cards_loaded)
+        self.crud_manager.cards_updated.connect(self._on_cards_updated_from_crud)
+
     def _create_logger(self):
         """Create a logger compatible with CardFileOperations."""
 
@@ -893,6 +910,35 @@ class CardManagementTab(QWidget):
                     print(f"[{level}] {message}")
 
         return CardManagementLogger(self)
+
+    # CRUD Manager Signal Handlers
+    def _on_card_created(self, card):
+        """Handle card creation from CRUD manager"""
+        # Stats are updated by CRUD manager internally
+        pass
+
+    def _on_card_updated(self, card):
+        """Handle card update from CRUD manager"""
+        # Table refresh is handled by CRUD manager internally
+        pass
+
+    def _on_card_deleted(self, card_id):
+        """Handle card deletion from CRUD manager"""
+        # Refresh stats after deletion
+        self.update_stats()
+        self.update_generation_stats()
+
+    def _on_cards_loaded(self, cards):
+        """Handle cards loaded from CRUD manager"""
+        # Stats are updated by CRUD manager internally
+        pass
+
+    def _on_cards_updated_from_crud(self, cards):
+        """Handle overall cards list update from CRUD manager"""
+        # Emit the signal to notify other components
+        if hasattr(self, "cards_updated"):
+            # The signal is already emitted by CRUD manager
+            pass
 
     def _sync_file_operations_with_main_window(self):
         """Synchronize file operations manager with main window state."""
@@ -1727,180 +1773,9 @@ class CardManagementTab(QWidget):
             # Switch to deck builder tab
             parent.tabs.setCurrentWidget(parent.deck_builder_tab)
 
-    def add_new_card(self):
-        """Add a new card to the deck"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Add New Card")
-        dialog.setModal(True)
-
-        layout = QFormLayout()
-
-        name_input = QLineEdit()
-        type_input = QLineEdit()
-        mana_input = QLineEdit()
-        text_input = QTextEdit()
-        text_input.setMaximumHeight(100)
-
-        layout.addRow("Name:", name_input)
-        layout.addRow("Type:", type_input)
-        layout.addRow("Mana Cost:", mana_input)
-        layout.addRow("Text:", text_input)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addRow(buttons)
-
-        dialog.setLayout(layout)
-
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            new_card = MTGCard()
-            new_card.id = len(self.cards) + 1
-            new_card.name = name_input.text()
-            new_card.type = type_input.text()
-            new_card.mana_cost = mana_input.text()
-            new_card.text = text_input.toPlainText()
-            new_card.status = "pending"
-
-            self.cards.append(new_card)
-            self.table_manager.refresh_table()
-
-    def delete_selected_cards(self):
-        """Delete selected cards from the deck"""
-        selected_rows = self.table_manager.get_selected_rows()
-
-        if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select cards to delete!")
-            return
-
-        reply = QMessageBox.question(
-            self,
-            "Delete Cards",
-            f"Delete {len(selected_rows)} selected cards?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            for row in sorted(selected_rows, reverse=True):
-                if 0 <= row < len(self.cards):
-                    del self.cards[row]
-
-            self.table_manager.refresh_table()
-            self.update_stats()
-            self.update_generation_stats()
-
     def edit_card(self):
-        """Edit selected card details including art description"""
-        selected_rows = self.table_manager.get_selected_rows()
-
-        if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select a card to edit!")
-            return
-
-        row = min(selected_rows)
-        if 0 <= row < len(self.cards):
-            card = self.cards[row]
-
-            dialog = QDialog(self)
-            dialog.setWindowTitle(f"Edit Card: {card.name}")
-            dialog.setModal(True)
-            dialog.resize(600, 500)
-
-            layout = QFormLayout()
-
-            name_input = QLineEdit(card.name)
-            type_input = QLineEdit(card.type)
-            mana_input = QLineEdit(card.mana_cost if card.mana_cost else "")
-            text_input = QTextEdit(card.text if card.text else "")
-            text_input.setMaximumHeight(100)
-
-            # Add power/toughness for creatures
-            power_input = QLineEdit(str(card.power) if card.power else "")
-            toughness_input = QLineEdit(str(card.toughness) if card.toughness else "")
-
-            # Add flavor text
-            flavor_input = QTextEdit(
-                card.flavor if hasattr(card, "flavor") and card.flavor else ""
-            )
-            flavor_input.setMaximumHeight(60)
-
-            # Add art description field - check both 'art' and 'art_prompt' attributes
-            art_text = ""
-
-            # Debug logging
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message("DEBUG", f"Checking art for card: {card.name}")
-                parent.log_message(
-                    "DEBUG", f"Has 'art' attribute: {hasattr(card, 'art')}"
-                )
-                parent.log_message(
-                    "DEBUG", f"Art value: {getattr(card, 'art', 'None')}"
-                )
-                parent.log_message(
-                    "DEBUG",
-                    f"Has 'art_prompt' attribute: {hasattr(card, 'art_prompt')}",
-                )
-                parent.log_message(
-                    "DEBUG", f"Art_prompt value: {getattr(card, 'art_prompt', 'None')}"
-                )
-
-            if hasattr(card, "art") and card.art:
-                art_text = card.art
-            elif hasattr(card, "art_prompt") and card.art_prompt:
-                art_text = card.art_prompt
-
-            art_input = QTextEdit(art_text)
-            art_input.setMaximumHeight(100)
-            art_input.setPlaceholderText(
-                "Enter art description for AI image generation..."
-            )
-
-            layout.addRow("Name:", name_input)
-            layout.addRow("Type:", type_input)
-            layout.addRow("Mana Cost:", mana_input)
-            layout.addRow("Text:", text_input)
-
-            # Power/Toughness row
-            pt_widget = QWidget()
-            pt_layout = QHBoxLayout()
-            pt_layout.setContentsMargins(0, 0, 0, 0)
-            pt_layout.addWidget(power_input)
-            pt_layout.addWidget(QLabel("/"))
-            pt_layout.addWidget(toughness_input)
-            pt_widget.setLayout(pt_layout)
-            layout.addRow("P/T:", pt_widget)
-
-            layout.addRow("Flavor:", flavor_input)
-            layout.addRow("Art Description:", art_input)
-
-            buttons = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Ok
-                | QDialogButtonBox.StandardButton.Cancel
-            )
-            buttons.accepted.connect(dialog.accept)
-            buttons.rejected.connect(dialog.reject)
-            layout.addRow(buttons)
-
-            dialog.setLayout(layout)
-
-            if dialog.exec() == QDialog.DialogCode.Accepted:
-                card.name = name_input.text()
-                card.type = type_input.text()
-                card.mana_cost = mana_input.text()
-                card.text = text_input.toPlainText()
-                card.power = power_input.text() if power_input.text() else None
-                card.toughness = (
-                    toughness_input.text() if toughness_input.text() else None
-                )
-                card.flavor = flavor_input.toPlainText()
-                # Save art description to both attributes for compatibility
-                card.art = art_input.toPlainText()
-                card.art_prompt = art_input.toPlainText()
-
-                self.table_manager.refresh_table()
+        """Edit selected card - delegates to CRUD manager"""
+        self.crud_manager.edit_card()
 
     def edit_selected_art_prompt(self):
         """Edit art prompt for selected card"""
@@ -2156,37 +2031,8 @@ class CardManagementTab(QWidget):
                 parent.log_message("INFO", f"Deleted {deleted_count} files")
 
     def load_cards(self, cards: list[MTGCard]):
-        """Load cards into table"""
-        self.cards = cards
-
-        # Update validation manager with new cards
-        self.validation_manager.update_cards(self.cards)
-        commander_colors = self.validation_manager.commander_colors
-
-        # Synchronize card status based on whether they have generated images
-        # Status should match whether the card has been generated
-        for card in self.cards:
-            if hasattr(card, "card_path") and card.card_path:
-                # Card has been generated (has a card image)
-                card.status = "completed"
-            else:
-                # No card image means it should be pending
-                # (unless it's currently generating or failed)
-                if hasattr(card, "status") and card.status in ["generating", "failed"]:
-                    # Keep generating or failed status
-                    pass
-                else:
-                    # Default to pending
-                    card.status = "pending"
-
-        # Log all cards with color violations
-        self.validation_manager.log_color_violations()
-
-        # Update the table manager with new cards and commander colors
-        self.table_manager.set_cards(self.cards)
-        self.table_manager.set_commander_colors(commander_colors)
-        self.update_stats()
-        self.update_generation_stats()
+        """Load cards into table - delegates to CRUD manager"""
+        self.crud_manager.load_cards(cards)
 
     def sync_card_status_with_rendered_files(self):
         """Synchronize card status based on existing rendered files"""
@@ -2374,106 +2220,12 @@ class CardManagementTab(QWidget):
         self.color_label.setText(color_label_text)
 
     def add_new_card(self):
-        """Add a new blank card to the deck"""
-        # Find the next available ID (highest existing ID + 1)
-        max_id = 0
-        for card in self.cards:
-            try:
-                card_id = int(card.id) if isinstance(card.id, str | int) else 0
-                max_id = max(max_id, card_id)
-            except (ValueError, TypeError):
-                continue
-
-        next_id = max_id + 1
-
-        # Create a new card with default values
-        new_card = MTGCard(
-            id=next_id,
-            name="New Card",
-            cost="{1}",
-            type="Creature",
-            text="",
-            power=1,
-            toughness=1,
-            rarity="common",
-            art="",
-            flavor="",
-            status="pending",
-        )
-
-        # Add to cards list
-        self.cards.append(new_card)
-
-        # Refresh table
-        self.table_manager.refresh_table()
-
-        # Select the new card (last row)
-        last_row = self.table.rowCount() - 1
-        self.table.selectRow(last_row)
-
-        # Open edit dialog for the new card
-        self.edit_card_at_row(last_row)
-
-        # Auto-save
-        main_window_save = self.parent().parent() if hasattr(self, "parent") else None
-        if main_window_save and hasattr(main_window_save, "auto_save_deck"):
-            main_window_save.auto_save_deck(self.cards)
-
-        # Log the action
-        main_window = self.parent().parent() if hasattr(self, "parent") else None
-        if main_window and hasattr(main_window, "log_message"):
-            main_window.log_message("INFO", f"Added new card: {new_card.name}")
+        """Add a new blank card to the deck - delegates to CRUD manager"""
+        self.crud_manager.add_new_card()
 
     def duplicate_selected_card(self):
-        """Duplicate the selected card"""
-
-        current_row = self.table.currentRow()
-        if current_row < 0:
-            return
-
-        # Find the next available ID
-        max_id = 0
-        for card in self.cards:
-            try:
-                card_id = int(card.id) if isinstance(card.id, str | int) else 0
-                max_id = max(max_id, card_id)
-            except (ValueError, TypeError):
-                continue
-
-        next_id = max_id + 1
-
-        # Create a copy of the selected card
-        original_card = self.cards[current_row]
-        new_card = MTGCard(
-            id=next_id,
-            name=f"{original_card.name} (Copy)",
-            cost=original_card.cost,
-            type=original_card.type,
-            text=original_card.text,
-            power=original_card.power,
-            toughness=original_card.toughness,
-            rarity=original_card.rarity,
-            art=original_card.art,
-            flavor=original_card.flavor,
-            status="pending",
-        )
-
-        # Add after the current card
-        self.cards.insert(current_row + 1, new_card)
-
-        # Refresh and select the new card
-        self.table_manager.refresh_table()
-        self.table.selectRow(current_row + 1)
-
-        # Auto-save
-        main_window_save = self.parent().parent() if hasattr(self, "parent") else None
-        if main_window_save and hasattr(main_window_save, "auto_save_deck"):
-            main_window_save.auto_save_deck(self.cards)
-
-        # Log
-        main_window = self.parent().parent() if hasattr(self, "parent") else None
-        if main_window and hasattr(main_window, "log_message"):
-            main_window.log_message("INFO", f"Duplicated card: {original_card.name}")
+        """Duplicate the selected card - delegates to CRUD manager"""
+        self.crud_manager.duplicate_selected_card()
 
     def regenerate_selected_card(self):
         """Regenerate the selected card"""
@@ -2486,107 +2238,8 @@ class CardManagementTab(QWidget):
         self.regenerate_card.emit(card)
 
     def delete_selected_cards(self):
-        """Delete selected cards from the deck"""
-        selected_rows = self.table_manager.get_selected_rows()
-
-        if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select cards to delete")
-            return
-
-        # Confirm deletion
-        card_count = len(selected_rows)
-        reply = QMessageBox.question(
-            self,
-            "Delete Cards",
-            f"Are you sure you want to delete {card_count} card(s)?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            # Get cards to delete (sort in reverse to maintain indices)
-            rows_to_delete = sorted(selected_rows, reverse=True)
-            deleted_names = []
-
-            for row in rows_to_delete:
-                if 0 <= row < len(self.cards):
-                    deleted_names.append(self.cards[row].name)
-                    del self.cards[row]
-
-            # Refresh table
-            self.table_manager.refresh_table()
-
-            # Auto-save
-            main_window_save = (
-                self.parent().parent() if hasattr(self, "parent") else None
-            )
-            if main_window_save and hasattr(main_window_save, "auto_save_deck"):
-                main_window_save.auto_save_deck(self.cards)
-
-            # Log the action
-            main_window = self.parent().parent() if hasattr(self, "parent") else None
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "INFO",
-                    f"Deleted {card_count} card(s): {', '.join(deleted_names[:3])}{'...' if len(deleted_names) > 3 else ''}",
-                )
-
-            # Emit signal
-            self.cards_updated.emit(self.cards)
-
-    def edit_card(self):
-        """Edit selected card"""
-        current_row = self.table.currentRow()
-        if current_row < 0:
-            QMessageBox.warning(self, "Warning", "Please select a card to edit!")
-            return
-
-        card = self.cards[current_row]
-
-        # Create edit dialog inline (like in the other edit_card method)
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Edit Card: {card.name}")
-        dialog.setModal(True)
-
-        from PyQt6.QtWidgets import QDialogButtonBox, QFormLayout
-
-        layout = QFormLayout()
-
-        name_input = QLineEdit(card.name)
-        type_input = QLineEdit(card.type)
-        cost_input = QLineEdit(card.cost if card.cost else "")
-        text_input = QTextEdit(card.text if card.text else "")
-        text_input.setMaximumHeight(100)
-
-        # Add power/toughness for creatures
-        power_input = QLineEdit(str(card.power) if card.power else "")
-        toughness_input = QLineEdit(str(card.toughness) if card.toughness else "")
-
-        layout.addRow("Name:", name_input)
-        layout.addRow("Type:", type_input)
-        layout.addRow("Mana Cost:", cost_input)
-        layout.addRow("Text:", text_input)
-        layout.addRow("Power:", power_input)
-        layout.addRow("Toughness:", toughness_input)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addRow(buttons)
-
-        dialog.setLayout(layout)
-
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            card.name = name_input.text()
-            card.type = type_input.text()
-            card.cost = cost_input.text()
-            card.text = text_input.toPlainText()
-            card.power = power_input.text() if power_input.text() else None
-            card.toughness = toughness_input.text() if toughness_input.text() else None
-
-            self.table_manager.refresh_table()
-            self.cards_updated.emit(self.cards)
+        """Delete selected cards from the deck - delegates to CRUD manager"""
+        self.crud_manager.delete_selected_cards()
 
     # Preview is now handled by a permanent panel on the right side
 
