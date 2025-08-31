@@ -3822,7 +3822,7 @@ class CardManagementTab(QWidget):
             self.refresh_table()
             self.cards_updated.emit(self.cards)
 
-    # Preview is now handled by permanent panel on the right side
+    # Preview is now handled by a permanent panel on the right side
 
     def generate_missing(self):
         """Generate missing values for cards"""
@@ -3839,184 +3839,6 @@ class CardManagementTab(QWidget):
             QMessageBox.information(
                 self, "Info", "All cards already have art descriptions!"
             )
-
-    def apply_queue_filter(self):
-        """Deprecated - using single table now"""
-        pass
-
-    def on_queue_selection_changed(self):
-        """Deprecated - using main table selection"""
-        pass
-
-    def edit_art_prompt_for_card(self, row):
-        """Edit art prompt for a specific card"""
-        if 0 <= row < len(self.cards):
-            card = self.cards[row]
-            current_prompt = getattr(
-                card, "art_prompt", f"Fantasy artwork for {card.name}"
-            )
-
-            text, ok = QInputDialog.getMultiLineText(
-                self,
-                f"Edit Art Prompt: {card.name}",
-                "Art Description:",
-                current_prompt,
-            )
-
-            if ok:
-                card.art_prompt = text
-                parent = get_main_window()
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message("INFO", f"Updated art prompt for {card.name}")
-
-    def regenerate_selected_with_image(self):
-        """Regenerate selected cards with new images"""
-        selected_rows = self.get_selected_rows()
-
-        if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select cards to regenerate!"
-            )
-            return
-
-        cards_to_regenerate = []
-        for row in selected_rows:
-            if 0 <= row < len(self.cards):
-                card = self.cards[row]
-                card.status = "pending"
-                cards_to_regenerate.append(card)
-
-        if cards_to_regenerate:
-            self.refresh_generation_queue()
-
-            # Start generation with new images
-            self.generator_worker.set_cards(
-                cards_to_regenerate,
-                self.model_combo.currentText(),
-                self.style_combo.currentText(),
-                "regeneration_with_image",
-            )
-            self.generator_worker.start()
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO",
-                    f"Regenerating {len(cards_to_regenerate)} cards with new images",
-                )
-
-    def regenerate_selected_card_only(self):
-        """Regenerate selected cards using existing artwork"""
-        selected_rows = self.get_selected_rows()
-
-        if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select cards to regenerate!"
-            )
-            return
-
-        cards_to_regenerate = []
-        for row in selected_rows:
-            if 0 <= row < len(self.cards):
-                card = self.cards[row]
-
-                # Check if artwork exists
-                safe_name = make_safe_filename(card.name)
-                artwork_found = False
-
-                # Get current deck name for deck-specific paths
-                parent = get_main_window()
-                deck_name = None
-                if parent and hasattr(parent, "current_deck_name"):
-                    deck_name = parent.current_deck_name
-
-                # Check deck-specific artwork directory FIRST (for custom images)
-                if deck_name:
-                    artwork_dir = Path("saved_decks") / deck_name / "artwork"
-                    if artwork_dir.exists():
-                        # Check for artwork with various extensions
-                        for ext in [".jpg", ".jpeg", ".png"]:
-                            artwork_path = artwork_dir / f"{safe_name}{ext}"
-                            if artwork_path.exists():
-                                artwork_found = True
-                                # UPDATE the card's image_path with the found artwork
-                                card.image_path = str(artwork_path)
-                                if parent and hasattr(parent, "log_message"):
-                                    parent.log_message(
-                                        "DEBUG", f"Found artwork at: {artwork_path}"
-                                    )
-                                    parent.log_message(
-                                        "DEBUG",
-                                        f"Updated card.image_path to: {card.image_path}",
-                                    )
-                                break
-
-                # If not found, check image_path (might be custom image path)
-                if (
-                    not artwork_found
-                    and hasattr(card, "image_path")
-                    and card.image_path
-                ):
-                    if Path(card.image_path).exists():
-                        artwork_found = True
-                        # Already has correct path
-                        if parent and hasattr(parent, "log_message"):
-                            parent.log_message(
-                                "DEBUG",
-                                f"Found artwork at image_path: {card.image_path}",
-                            )
-
-                # Finally check old output/images location as fallback
-                if not artwork_found:
-                    for ext in [".jpg", ".jpeg", ".png"]:
-                        artwork_path = Path(f"output/images/{safe_name}{ext}")
-                        if artwork_path.exists():
-                            artwork_found = True
-                            # UPDATE the card's image_path with the found artwork
-                            card.image_path = str(artwork_path)
-                            if parent and hasattr(parent, "log_message"):
-                                parent.log_message(
-                                    "DEBUG",
-                                    f"Found artwork at output/images: {artwork_path}",
-                                )
-                                parent.log_message(
-                                    "DEBUG",
-                                    f"Updated card.image_path to: {card.image_path}",
-                                )
-                            break
-
-                if not artwork_found:
-                    reply = QMessageBox.question(
-                        self,
-                        "No Artwork",
-                        f"No artwork found for '{card.name}'. Generate with new artwork instead?",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    )
-                    if reply == QMessageBox.StandardButton.Yes:
-                        card.status = "pending"
-                        cards_to_regenerate.append(card)
-                else:
-                    card.status = "pending"
-                    cards_to_regenerate.append(card)
-
-        if cards_to_regenerate:
-            self.refresh_generation_queue()
-
-            # Start card-only regeneration
-            self.generator_worker.set_cards(
-                cards_to_regenerate,
-                self.model_combo.currentText(),
-                self.style_combo.currentText(),
-                "card_only_regeneration",
-            )
-            self.generator_worker.start()
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO",
-                    f"Regenerating {len(cards_to_regenerate)} cards (keeping artwork)",
-                )
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
@@ -4487,7 +4309,7 @@ class MTGDeckBuilder(QMainWindow):
         # Logger panel
         self.create_logger_panel()
 
-        # Add to left splitter with better proportions for logger
+        # Add to the left splitter with better proportions for logger
         left_splitter.addWidget(self.tabs)
         left_splitter.addWidget(self.logger_widget)
         left_splitter.setSizes([450, 450])  # Equal split for better logger visibility
@@ -4495,10 +4317,10 @@ class MTGDeckBuilder(QMainWindow):
         # Right side: Card Preview Panel
         self.create_card_preview_panel()
 
-        # Add to main splitter
+        # Add to the main splitter
         main_splitter.addWidget(left_splitter)
         main_splitter.addWidget(self.card_preview_widget)
-        main_splitter.setSizes([900, 500])  # 900px for left side, 500px for preview
+        main_splitter.setSizes([900, 500])  # 900 px for left side, 500 px for preview
 
         layout.addWidget(main_splitter)
 
@@ -4572,7 +4394,7 @@ class MTGDeckBuilder(QMainWindow):
         self.auto_save_deck(cards, new_generation=True)
 
     def on_cards_updated(self, cards: list[MTGCard]):
-        """Handle cards updated from management tab"""
+        """Handle cards updated from the management tab"""
         self.cards_tab.load_cards(cards)
         # Auto-save on updates (only update latest, no new timestamp)
         # Note: current_deck_name should already be set from load_deck
@@ -4600,10 +4422,10 @@ class MTGDeckBuilder(QMainWindow):
                 current_cards[i] = card
                 break
 
-        # Load all cards to generation tab (it will only generate pending ones)
+        # Load all cards to the generation tab (it will only generate pending ones)
         self.cards_tab.load_cards(current_cards)
 
-        # Switch to cards tab (generation is now merged there)
+        # Switch to the card tab (generation is now merged there)
         self.tabs.setCurrentIndex(1)
 
         # Start generation for pending cards (which includes our reset card)
