@@ -340,7 +340,25 @@ class UnifiedImageGenerator:
 
         # Generate filename
         if output_name:
-            filename = f"{output_name}.{self.config['output_settings']['image_format']}"
+            # Sanitize output_name to ensure it's filesystem-safe
+            safe_name = output_name
+            for char in [
+                "/",
+                "\\",
+                ":",
+                "*",
+                "?",
+                '"',
+                "<",
+                ">",
+                "|",
+                "\u202f",
+                "\u00a0",
+                "—",
+                "–",
+            ]:
+                safe_name = safe_name.replace(char, "_")
+            filename = f"{safe_name}.{self.config['output_settings']['image_format']}"
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"generated_{timestamp}.{self.config['output_settings']['image_format']}"

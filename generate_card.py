@@ -28,14 +28,36 @@ except ImportError:
 
 
 class UnifiedCardGenerator:
-    def __init__(self, output_dir: str = "output/cards", api_model: str = None):
+    def __init__(
+        self,
+        output_dir: str = "output/cards",
+        images_dir: str = "output/images",
+        api_model: str = None,
+    ):
         """Initialize the unified card generator."""
         self.base_dir = Path(__file__).parent
-        self.output_dir = self.base_dir / output_dir
+        self.output_dir = (
+            Path(output_dir)
+            if Path(output_dir).is_absolute()
+            else self.base_dir / output_dir
+        )
+        self.images_dir = (
+            Path(images_dir)
+            if Path(images_dir).is_absolute()
+            else self.base_dir / images_dir
+        )
         self.output_dir.mkdir(exist_ok=True, parents=True)
+        self.images_dir.mkdir(exist_ok=True, parents=True)
 
-        # Initialize image generator
+        # Initialize image generator with custom output directory
         self.image_generator = UnifiedImageGenerator()
+        # Override the output directory from config
+        if "output_settings" not in self.image_generator.config:
+            self.image_generator.config["output_settings"] = {}
+        self.image_generator.config["output_settings"]["output_dir"] = str(
+            self.images_dir
+        )
+
         if os.getenv("REPLICATE_API_TOKEN"):
             self.image_generator.mode = "api"
 
@@ -257,6 +279,8 @@ class UnifiedCardGenerator:
         art_description: Optional[str] = None,
         art_style: Optional[str] = None,
         interactive: bool = False,
+        skip_image: bool = False,
+        custom_image_path: Optional[str] = None,
     ):
         """Create a card with provided details or generate from prompt."""
 
@@ -269,18 +293,33 @@ class UnifiedCardGenerator:
 
         # Mode 2: Use provided details
         elif name:
+            # Check if this is a land card
+            is_land = type_line and "land" in type_line.lower()
+
+            # Only add default mana cost for non-land cards
+            if is_land:
+                actual_mana_cost = ""  # Lands have no mana cost
+                actual_colors = []  # Lands are colorless
+            else:
+                actual_mana_cost = mana_cost or "{2}"
+                actual_colors = self._extract_colors(actual_mana_cost)
+
             card_data = {
                 "name": name,
-                "mana_cost": mana_cost or "{2}",
+                "mana_cost": actual_mana_cost,
                 "type_line": type_line or "Creature",
                 "oracle_text": oracle_text or "",
-                "power": power,
-                "toughness": toughness,
                 "flavor_text": flavor_text or "",
                 "rarity": rarity or "uncommon",
-                "colors": self._extract_colors(mana_cost or "{2}"),
+                "colors": actual_colors,
                 "art_description": art_description or f"Fantasy art of {name}",
             }
+
+            # Only add power/toughness for creatures, not for lands
+            if not is_land and power is not None:
+                card_data["power"] = power
+            if not is_land and toughness is not None:
+                card_data["toughness"] = toughness
 
         # Mode 3: Interactive input
         else:
@@ -310,8 +349,97 @@ class UnifiedCardGenerator:
         if card_data.get("power"):
             print(f"   P/T: {card_data['power']}/{card_data['toughness']}")
 
-        # Generate artwork
-        if self.has_image_api:
+        # Handle custom image path
+        if custom_image_path:
+            print("\n🖼️ Using custom image...")
+            custom_path = Path(custom_image_path)
+            if custom_path.exists():
+                # Process and crop the custom image to fit the artwork area
+                from PIL import Image
+
+                safe_name = card_data["name"]
+                for char in [
+                    "/",
+                    "\\",
+                    ":",
+                    "*",
+                    "?",
+                    '"',
+                    "<",
+                    ">",
+                    "|",
+                    "\u202f",
+                    "\u00a0",
+                    "—",
+                    "–",
+                ]:
+                    safe_name = safe_name.replace(char, "_")
+                safe_name = (
+                    safe_name.replace(" ", "_").replace(",", "").replace("'", "")
+                )
+
+                # Create output directory if needed
+                images_dir = self.images_dir
+                images_dir.mkdir(exist_ok=True, parents=True)
+
+                # Open and process the image
+                img = Image.open(custom_path)
+
+                # MTG card artwork dimensions (approximate)
+                # The artwork area is roughly 626x475 pixels on a standard card
+                target_width = 626
+                target_height = 475
+
+                # Convert to RGB if necessary (handles RGBA, etc.)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+
+                # Calculate aspect ratios
+                img_ratio = img.width / img.height
+                target_ratio = target_width / target_height
+
+                # Crop and resize to fill the entire artwork area
+                if img_ratio > target_ratio:
+                    # Image is wider - crop the sides
+                    new_height = img.height
+                    new_width = int(new_height * target_ratio)
+                    left = (img.width - new_width) // 2
+                    top = 0
+                    right = left + new_width
+                    bottom = img.height
+                else:
+                    # Image is taller - crop the top and bottom
+                    new_width = img.width
+                    new_height = int(new_width / target_ratio)
+                    left = 0
+                    top = (img.height - new_height) // 2
+                    right = img.width
+                    bottom = top + new_height
+
+                # Crop the image
+                img_cropped = img.crop((left, top, right, bottom))
+
+                # Resize to exact target dimensions
+                img_final = img_cropped.resize(
+                    (target_width, target_height), Image.Resampling.LANCZOS
+                )
+
+                # Save the processed image
+                output_path = images_dir / f"{safe_name}.jpg"
+                img_final.save(output_path, "JPEG", quality=95)
+
+                card_data["image_uris"] = {"art_crop": str(output_path.absolute())}
+                print(f"   ✅ Custom image processed and saved to: {output_path}")
+                print(
+                    f"   📐 Image cropped and resized to {target_width}x{target_height}"
+                )
+            else:
+                print(f"   ⚠️ Custom image not found: {custom_image_path}")
+                print("   Falling back to AI generation...")
+                custom_image_path = None
+
+        # Generate artwork (skip if requested or custom image provided)
+        if self.has_image_api and not skip_image and not custom_image_path:
             print("\n🎨 Generating Artwork...")
             try:
                 # Use art_description from card_data if not explicitly provided
@@ -346,10 +474,39 @@ class UnifiedCardGenerator:
                 print(f"   Prompt: {art_description[:80]}...")
                 print(f"   Style: {art_style}")
 
+                # Sanitize the card name for use as filename
+                safe_name = card_data["name"]
+                # Replace problematic characters with underscores
+                for char in [
+                    "/",
+                    "\\",
+                    ":",
+                    "*",
+                    "?",
+                    '"',
+                    "<",
+                    ">",
+                    "|",
+                    "\u202f",
+                    "\u00a0",
+                    "—",
+                    "–",
+                ]:
+                    safe_name = safe_name.replace(char, "_")
+                # Replace spaces, commas, and apostrophes
+                safe_name = (
+                    safe_name.replace(" ", "_").replace(",", "").replace("'", "")
+                )
+
+                # Update output directory in config before generating
+                self.image_generator.config["output_settings"]["output_dir"] = str(
+                    self.images_dir
+                )
+
                 image_path = self.image_generator.generate(
                     prompt=art_description,
                     style=art_style,
-                    output_name=card_data["name"].replace(" ", "_").replace(",", ""),
+                    output_name=safe_name,
                 )
 
                 if image_path:
@@ -357,10 +514,61 @@ class UnifiedCardGenerator:
                     print("   ✅ Artwork generated")
             except Exception as e:
                 print(f"   ⚠️ Artwork generation failed: {e}")
+        elif skip_image:
+            # When skipping image generation, try to find existing artwork
+            print("\n🔍 Looking for existing artwork...")
+            safe_name = (
+                card_data["name"].replace(" ", "_").replace(",", "").replace("'", "")
+            )
+            simple_name = card_data["name"].split(",")[0].strip()
+
+            # Search for existing artwork in various locations
+            artwork_found = False
+
+            # Check multiple possible paths
+            possible_paths = [
+                self.images_dir / f"{safe_name}.jpg",
+                self.images_dir / f"{safe_name}.jpeg",
+                self.images_dir / f"{safe_name}.png",
+                self.images_dir / f"{simple_name}.jpg",
+                self.images_dir / f"{simple_name}.jpeg",
+                self.images_dir / f"{simple_name}.png",
+            ]
+
+            for path in possible_paths:
+                if path.exists():
+                    card_data["image_uris"] = {"art_crop": str(path.absolute())}
+                    print(f"   ✅ Using existing artwork: {path}")
+                    artwork_found = True
+                    break
+
+            if not artwork_found:
+                print(
+                    "   ⚠️ No existing artwork found, card will have placeholder image"
+                )
 
         # Save JSON
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = card_data["name"].replace(" ", "_").replace(",", "")
+        # Make the name safe for filesystem - remove all problematic characters
+        safe_name = card_data["name"]
+        # Replace various types of spaces and special characters
+        for char in [
+            "/",
+            "\\",
+            ":",
+            "*",
+            "?",
+            '"',
+            "<",
+            ">",
+            "|",
+            "\u202f",
+            "\u00a0",
+            "—",
+            "–",
+        ]:
+            safe_name = safe_name.replace(char, "_")
+        safe_name = safe_name.replace(" ", "_").replace(",", "").replace("'", "")
         json_path = self.output_dir / f"{safe_name}_{timestamp}.json"
 
         with open(json_path, "w") as f:
@@ -463,26 +671,79 @@ class UnifiedCardGenerator:
         html_path = render_dir / "index.html"
 
         if not html_path.exists():
-            print("❌ Renderer not found")
+            print(f"❌ Renderer not found at: {html_path}")
             return None
+
+        print("\n🔍 Validating card data before rendering...")
+        # Validate card data
+        required_fields = ["name", "mana_cost", "type_line"]
+        missing_fields = [
+            field for field in required_fields if not card_json.get(field)
+        ]
+        if missing_fields:
+            print(f"   ⚠️ WARNING: Missing required fields: {missing_fields}")
+            # Add defaults for missing fields
+            if not card_json.get("name"):
+                card_json["name"] = "Unknown Card"
+            if not card_json.get("mana_cost"):
+                card_json["mana_cost"] = "{0}"
+            if not card_json.get("type_line"):
+                card_json["type_line"] = "Unknown"
+
+        # Log card data for debugging
+        print(f"   Card Name: {card_json.get('name', 'MISSING')}")
+        print(f"   Mana Cost: {card_json.get('mana_cost', 'MISSING')}")
+        print(f"   Type: {card_json.get('type_line', 'MISSING')}")
+        print(
+            f"   Oracle Text: {'Present' if card_json.get('oracle_text') else 'None'}"
+        )
+        print(
+            f"   Power/Toughness: {card_json.get('power', 'N/A')}/{card_json.get('toughness', 'N/A')}"
+        )
+        print(f"   Rarity: {card_json.get('rarity', 'common')}")
+        print(f"   Image: {'Present' if card_json.get('image_uris') else 'None'}")
 
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page(viewport={"width": 1600, "height": 2400})
 
+                # Add console error logging
+                page.on(
+                    "console",
+                    lambda msg: print(f"   Browser console: {msg.text}")
+                    if msg.type in ["error", "warning"]
+                    else None,
+                )
+                page.on("pageerror", lambda err: print(f"   ❌ Page error: {err}"))
+
+                print(f"   Loading renderer from: {html_path.absolute()}")
                 await page.goto(f"file://{html_path.absolute()}")
                 await page.wait_for_load_state("networkidle")
 
+                print("   Filling card JSON...")
                 await page.fill("#card-json", json.dumps(card_json, indent=2))
                 await page.wait_for_timeout(500)
 
+                print("   Clicking render button...")
                 await page.click("#render-button")
-                await page.wait_for_selector(".mtg-card", timeout=5000)
+
+                print("   Waiting for card to render...")
+                try:
+                    await page.wait_for_selector(".mtg-card", timeout=5000)
+                except Exception as e:
+                    print(f"   ❌ Card rendering timeout: {e}")
+                    # Take a screenshot for debugging
+                    debug_path = self.output_dir / f"debug_{output_name}.png"
+                    await page.screenshot(path=str(debug_path))
+                    print(f"   Debug screenshot saved to: {debug_path}")
+                    raise
 
                 if "image_uris" in card_json:
+                    print("   Waiting for artwork to load...")
                     await page.wait_for_timeout(3000)
                 else:
+                    print("   No artwork, using placeholder...")
                     await page.wait_for_timeout(1000)
 
                 await page.evaluate(
@@ -502,7 +763,11 @@ class UnifiedCardGenerator:
                 if card_element:
                     box = await card_element.bounding_box()
                     if box:
+                        print(
+                            f"   Card dimensions: {box['width']}x{box['height']} at ({box['x']}, {box['y']})"
+                        )
                         png_path = self.output_dir / f"{output_name}.png"
+                        print("   Taking screenshot...")
                         await page.screenshot(
                             path=str(png_path),
                             clip={
@@ -515,11 +780,23 @@ class UnifiedCardGenerator:
                             omit_background=True,
                         )
                         await browser.close()
+                        print(f"   ✅ Card rendered successfully to: {png_path}")
                         return png_path
+                    else:
+                        print("   ❌ Could not get card bounding box")
+                else:
+                    print("   ❌ Card element not found on page")
+                    # Take a debug screenshot
+                    debug_path = self.output_dir / f"debug_{output_name}.png"
+                    await page.screenshot(path=str(debug_path), full_page=True)
+                    print(f"   Debug screenshot saved to: {debug_path}")
 
                 await browser.close()
         except Exception as e:
             print(f"❌ Render error: {e}")
+            import traceback
+
+            print(f"Stack trace:\n{traceback.format_exc()}")
 
         return None
 
@@ -573,6 +850,16 @@ Examples:
     # Art options
     parser.add_argument("--art", dest="art_description", help="Art description")
     parser.add_argument(
+        "--skip-image",
+        action="store_true",
+        help="Skip image generation (useful when regenerating card with existing artwork)",
+    )
+    parser.add_argument(
+        "--custom-image",
+        dest="custom_image_path",
+        help="Path to custom image file to use as artwork (skips AI generation)",
+    )
+    parser.add_argument(
         "--style",
         dest="art_style",
         choices=[
@@ -602,12 +889,22 @@ Examples:
     )
 
     # Output
-    parser.add_argument("--output", default="output/cards", help="Output directory")
+    parser.add_argument(
+        "--output", default="output/cards", help="Output directory for cards"
+    )
+    parser.add_argument(
+        "--images-output", default="output/images", help="Output directory for artwork"
+    )
 
     args = parser.parse_args()
 
     # Create generator
-    generator = UnifiedCardGenerator(output_dir=args.output, api_model=args.api_model)
+    images_dir = (
+        args.images_output if hasattr(args, "images_output") else "output/images"
+    )
+    generator = UnifiedCardGenerator(
+        output_dir=args.output, images_dir=images_dir, api_model=args.api_model
+    )
 
     # Print header
     print(
@@ -638,6 +935,10 @@ Examples:
             rarity=args.rarity,
             art_description=args.art_description,
             art_style=args.art_style,
+            skip_image=args.skip_image if hasattr(args, "skip_image") else False,
+            custom_image_path=args.custom_image_path
+            if hasattr(args, "custom_image_path")
+            else None,
         )
 
 

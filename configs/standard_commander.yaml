@@ -1,0 +1,33 @@
+deck_structure:
+  commander: 1
+  lands: 37
+  creatures: 30
+  instants: 10
+  sorceries: 10
+  artifacts: 7
+  enchantments: 5
+  total: 100
+
+rarity_distribution:
+  mythic: 3
+  rare: 15
+  uncommon: 30
+  common: 52
+
+mana_curve:
+  0-1: 8
+  2: 14
+  3: 16
+  4: 14
+  5: 10
+  6: 6
+  7+: 4
+  lands: 37
+
+color_suggestions:
+  percy_jackson: ["U", "W", "G"]  # Blue (sea), White (heroes), Green (nature)
+  harry_potter: ["W", "U", "B", "R", "G"]  # All colors for houses
+  lord_of_the_rings: ["W", "G", "B"]  # White (good), Green (nature), Black (evil)
+  star_wars: ["W", "U", "B", "R"]  # Light/Dark sides
+  marvel: ["W", "U", "B", "R", "G"]  # All colors for variety
+  game_of_thrones: ["B", "R", "W"]  # Politics, war, honor
