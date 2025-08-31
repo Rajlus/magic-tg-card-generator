@@ -1422,7 +1422,9 @@ class CardManagementTab(QWidget):
     def _setup_table_manager(self):
         """Initialize and configure the table manager."""
         # Create the table manager
-        self.table_manager = CardTableManager(self.table, self.cards)
+        self.table_manager = CardTableManager(
+            self.table, self.cards, logger=self._create_logger()
+        )
 
         # Connect filter components to the manager
         self.table_manager.set_filter_components(

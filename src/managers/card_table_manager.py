@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from .card_filter_manager import CardFilterManager
+
 
 class CardTableManager(QObject):
     """
@@ -85,25 +87,28 @@ class CardTableManager(QObject):
         COLUMN_IMAGE: 80,
     }
 
-    def __init__(self, table_widget: QTableWidget, cards: list[Any] = None):
+    def __init__(
+        self, table_widget: QTableWidget, cards: list[Any] = None, logger=None
+    ):
         """
         Initialize the CardTableManager.
 
         Args:
             table_widget: The QTableWidget to manage
             cards: List of MTG cards (optional)
+            logger: Logger for message logging
         """
         super().__init__()
         self.table = table_widget
         self.cards = cards or []
         self.commander_colors = set()
-        self.filtered_cards = []
+        self.logger = logger
 
-        # Filter components (will be set by parent)
-        self.filter_combo: Optional[QComboBox] = None
-        self.status_filter_combo: Optional[QComboBox] = None
-        self.search_input: Optional[QLineEdit] = None
-        self.filter_result_label: Optional[QLabel] = None
+        # Initialize filter manager
+        self.filter_manager = CardFilterManager(
+            cards=self.cards, table_widget=self.table, logger=self.logger
+        )
+        self._connect_filter_signals()
 
         self._setup_table()
         self._connect_signals()
@@ -116,18 +121,9 @@ class CardTableManager(QObject):
         filter_result_label: QLabel,
     ):
         """Set the filter UI components."""
-        self.filter_combo = filter_combo
-        self.status_filter_combo = status_filter_combo
-        self.search_input = search_input
-        self.filter_result_label = filter_result_label
-
-        # Connect filter signals
-        if self.filter_combo:
-            self.filter_combo.currentTextChanged.connect(self.apply_filter)
-        if self.status_filter_combo:
-            self.status_filter_combo.currentTextChanged.connect(self.apply_filter)
-        if self.search_input:
-            self.search_input.textChanged.connect(self.apply_filter)
+        self.filter_manager.set_filter_components(
+            filter_combo, status_filter_combo, search_input, filter_result_label
+        )
 
     def _setup_table(self):
         """Set up the table widget configuration."""
@@ -160,6 +156,27 @@ class CardTableManager(QObject):
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
 
+    def _connect_filter_signals(self):
+        """Connect filter manager signals."""
+        self.filter_manager.filter_applied.connect(self._on_filter_applied)
+        self.filter_manager.filter_cleared.connect(self._on_filter_cleared)
+        self.filter_manager.search_performed.connect(self._on_search_performed)
+
+    def _on_filter_applied(self, visible_count: int, total_count: int):
+        """Handle filter applied signal."""
+        # Can be used for additional processing when filters are applied
+        pass
+
+    def _on_filter_cleared(self):
+        """Handle filter cleared signal."""
+        # Can be used for additional processing when filters are cleared
+        pass
+
+    def _on_search_performed(self, search_text: str, result_count: int):
+        """Handle search performed signal."""
+        # Can be used for search analytics or logging
+        pass
+
     def set_cards(self, cards: list[Any]):
         """
         Set the cards list and refresh the table.
@@ -168,6 +185,7 @@ class CardTableManager(QObject):
             cards: List of MTG cards to display
         """
         self.cards = cards
+        self.filter_manager.set_cards(cards)
         self.refresh_table()
 
     def set_commander_colors(self, colors: set[str]):
@@ -193,7 +211,7 @@ class CardTableManager(QObject):
                 self._populate_table_row(row, card)
 
             # Apply current filters after refresh
-            self.apply_filter()
+            self.filter_manager.apply_filter()
 
         finally:
             # Reconnect the signal
@@ -339,126 +357,29 @@ class CardTableManager(QObject):
         return bool(cost_colors - self.commander_colors)
 
     def apply_filter(self):
-        """Apply current filters to the table display."""
-        if not (self.filter_combo and self.status_filter_combo and self.search_input):
-            return
+        """Apply current filters to the table display - delegates to filter manager."""
+        self.filter_manager.apply_filter()
 
-        filter_text = self.filter_combo.currentText()
-        status_filter = self.status_filter_combo.currentText()
-        search_text = self.search_input.text().lower()
-
-        visible_count = 0
-        total_count = self.table.rowCount()
-
-        for row in range(total_count):
-            show = self._should_show_row(row, filter_text, status_filter, search_text)
-            self.table.setRowHidden(row, not show)
-            if show:
-                visible_count += 1
-
-        # Update filter result label
-        self._update_filter_result_label(visible_count, total_count)
-
-    def _should_show_row(
-        self, row: int, type_filter: str, status_filter: str, search_text: str
-    ) -> bool:
+    def set_filter_manager(self, filter_manager: CardFilterManager):
         """
-        Determine if a table row should be visible based on filters.
+        Set a custom filter manager (for dependency injection).
 
         Args:
-            row: Row index
-            type_filter: Type filter text
-            status_filter: Status filter text
-            search_text: Search text
-
-        Returns:
-            True if row should be visible
+            filter_manager: CardFilterManager instance to use
         """
-        # Type filter
-        if type_filter != "All":
-            type_item = self.table.item(row, self.COLUMN_TYPE)
-            if not type_item:
-                return False
+        # Disconnect old filter manager signals if they exist
+        if hasattr(self, "filter_manager") and self.filter_manager:
+            try:
+                self.filter_manager.filter_applied.disconnect()
+                self.filter_manager.filter_cleared.disconnect()
+                self.filter_manager.search_performed.disconnect()
+            except:
+                pass
 
-            card_type = type_item.text().lower()
-            if not self._matches_type_filter(card_type, type_filter):
-                return False
-
-        # Status filter
-        if status_filter != "All":
-            status_item = self.table.item(row, self.COLUMN_STATUS)
-            if not status_item:
-                return False
-
-            if not self._matches_status_filter(status_item.text(), status_filter):
-                return False
-
-        # Search filter
-        if search_text:
-            if not self._matches_search_filter(row, search_text):
-                return False
-
-        return True
-
-    def _matches_type_filter(self, card_type: str, filter_text: str) -> bool:
-        """Check if card type matches the type filter."""
-        type_mappings = {
-            "Creatures": ["kreatur", "creature"],
-            "Lands": ["land"],
-            "Instants": ["spontanzauber", "instant"],
-            "Sorceries": ["hexerei", "sorcery"],
-            "Artifacts": ["artefakt", "artifact"],
-            "Enchantments": ["verzauberung", "enchantment"],
-        }
-
-        if filter_text in type_mappings:
-            return any(keyword in card_type for keyword in type_mappings[filter_text])
-
-        return True
-
-    def _matches_status_filter(self, status_text: str, status_filter: str) -> bool:
-        """Check if status text matches the status filter."""
-        status_mappings = {
-            "✅ Completed": "✅",
-            "⏸️ Pending": "⏸️",
-            "❌ Failed": "❌",
-            "🔄 Generating": "🔄",
-        }
-
-        if status_filter in status_mappings:
-            return status_mappings[status_filter] in status_text
-
-        return True
-
-    def _matches_search_filter(self, row: int, search_text: str) -> bool:
-        """Check if any cell in the row matches the search text."""
-        searchable_columns = [
-            self.COLUMN_NAME,
-            self.COLUMN_COST,
-            self.COLUMN_TYPE,
-            self.COLUMN_TEXT,
-            self.COLUMN_ART,
-        ]
-
-        for col in searchable_columns:
-            item = self.table.item(row, col)
-            if item and search_text in item.text().lower():
-                return True
-
-        return False
-
-    def _update_filter_result_label(self, visible_count: int, total_count: int):
-        """Update the filter result label."""
-        if not self.filter_result_label:
-            return
-
-        if visible_count == total_count:
-            self.filter_result_label.setVisible(False)
-        else:
-            self.filter_result_label.setText(
-                f"Showing {visible_count} of {total_count} cards"
-            )
-            self.filter_result_label.setVisible(True)
+        self.filter_manager = filter_manager
+        self.filter_manager.set_table(self.table)
+        self.filter_manager.set_cards(self.cards)
+        self._connect_filter_signals()
 
     def get_selected_rows(self) -> set[int]:
         """
@@ -660,8 +581,20 @@ class CardTableManager(QObject):
 
     def get_visible_card_count(self) -> int:
         """Get the number of currently visible (not filtered) cards."""
-        visible_count = 0
-        for row in range(self.table.rowCount()):
-            if not self.table.isRowHidden(row):
-                visible_count += 1
-        return visible_count
+        return len(self.filter_manager.get_visible_rows())
+
+    def get_filtered_cards(self) -> list[Any]:
+        """Get list of currently visible cards after filtering."""
+        return self.filter_manager.get_filtered_cards()
+
+    def clear_filters(self):
+        """Clear all active filters."""
+        self.filter_manager.clear_all_filters()
+
+    def get_filter_state(self) -> dict[str, Any]:
+        """Get current filter state."""
+        return self.filter_manager.get_filter_state()
+
+    def set_filter_state(self, filter_state: dict[str, Any]):
+        """Set filter state from dictionary."""
+        self.filter_manager.set_filter_state(filter_state)
