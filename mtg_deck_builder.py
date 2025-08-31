@@ -1957,6 +1957,13 @@ class CardManagementTab(QWidget):
                 self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
             ]
 
+            # Log the generation start
+            if parent and hasattr(parent, "log_message"):
+                parent.log_message(
+                    "GENERATING",
+                    f"Starting image generation for {len(cards_with_custom)} cards...",
+                )
+
             # Get deck name from parent
             deck_name = None
             parent = get_main_window()
@@ -2235,6 +2242,13 @@ class CardManagementTab(QWidget):
             cards_with_custom = [
                 self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
             ]
+
+            # Log the generation start
+            if parent and hasattr(parent, "log_message"):
+                parent.log_message(
+                    "GENERATING",
+                    f"Starting image generation for {len(cards_with_custom)} cards...",
+                )
 
             # Get deck name from parent
             deck_name = None

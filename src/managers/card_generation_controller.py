@@ -574,7 +574,7 @@ class CardGeneratorWorker(QThread):
                     if default_card_path and default_card_path.exists():
                         # For custom images, keep the original filename from generation
                         # Don't rename to safe_name as it may not match
-                        if self.style == "custom_image":
+                        if self.theme == "custom_image" or self.style == "custom_image":
                             final_path = default_card_path
                         else:
                             # Target path without timestamp for non-custom images
@@ -675,7 +675,8 @@ class CardGeneratorWorker(QThread):
                             # For custom images, just use the path as-is
                             # For other images, rename to remove timestamp
                             if (
-                                self.style == "custom_image"
+                                self.theme == "custom_image"
+                                or self.style == "custom_image"
                                 or final_path == default_card_path
                             ):
                                 # Don't move/rename for custom images
@@ -1710,10 +1711,8 @@ class CardGenerationController(QObject):
                 and card.image_path
                 and Path(card.image_path).exists()
             ):
-                try:
+                with contextlib.suppress(Exception):
                     Path(card.image_path).unlink()
-                except:
-                    pass
 
             # Reset card status
             card.status = "pending"
