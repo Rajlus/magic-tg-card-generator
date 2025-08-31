@@ -53,6 +53,10 @@ from PyQt6.QtWidgets import (
 )
 
 from src.managers.card_file_operations import CardFileOperations
+from src.managers.card_generation_controller import (
+    CardGenerationController,
+    CardGeneratorWorker,
+)
 from src.managers.card_table_manager import CardTableManager
 
 load_dotenv()
@@ -402,549 +406,7 @@ For EACH card, create a 2-3 sentence visual description that:
 Format: [NUMBER]. [DETAILED ART DESCRIPTION]"""
 
 
-class CardGeneratorWorker(QThread):
-    """Worker thread for card generation"""
-
-    progress = pyqtSignal(int, str)  # card_id, status
-    completed = pyqtSignal(
-        int, bool, str, str, str
-    )  # card_id, success, message, image_path, card_path
-    log_message = pyqtSignal(str, str)  # level, message - for thread-safe logging
-
-    def __init__(self):
-        super().__init__()
-        self.cards_queue = []
-        self.model = "sdxl"
-        self.style = "mtg_modern"
-        self.paused = False
-        self.current_card = None
-        self.theme = "default"
-        self.output_dir = None
-
-    def set_cards(
-        self,
-        cards: list[MTGCard],
-        model: str,
-        style: str,
-        theme: str = "default",
-        deck_name: str = None,
-    ):
-        self.cards_queue = cards.copy()
-        self.model = model
-        self.style = style
-        self.theme = theme.lower().replace(" ", "_")
-        self.deck_name = deck_name
-
-        # Handle different regeneration types
-        if theme == "card_only_regeneration":
-            self.regeneration_type = "card_only"
-            self.theme = "regeneration"
-        elif theme == "regeneration_with_image":
-            self.regeneration_type = "with_image"
-            self.theme = "regeneration"
-        else:
-            self.regeneration_type = None
-
-        # Use deck-specific output directory if deck name provided
-        if self.deck_name:
-            self.output_dir = Path("saved_decks") / self.deck_name
-            self.cards_dir = self.output_dir / "rendered_cards"
-            self.images_dir = self.output_dir / "artwork"
-        else:
-            # Fallback to old structure
-            self.output_dir = Path("generated_cards") / self.theme
-            self.cards_dir = self.output_dir / "cards"
-            self.images_dir = self.output_dir / "images"
-
-        # Create directories
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.cards_dir.mkdir(parents=True, exist_ok=True)
-        self.images_dir.mkdir(parents=True, exist_ok=True)
-
-    def pause(self):
-        self.paused = True
-
-    def resume(self):
-        self.paused = False
-
-    def run(self):
-        """Process card generation queue"""
-        # Note: We can't directly access GUI elements from worker thread
-        # Use signals instead for thread-safe communication
-
-        for card in self.cards_queue:
-            if self.paused:
-                while self.paused:
-                    self.msleep(100)
-
-            self.current_card = card
-            # Debug logging for ID tracking
-            self.log_message.emit(
-                "DEBUG",
-                f"Processing card: {card.name} with ID: {card.id} (type: {type(card.id)})",
-            )
-            self.progress.emit(card.id, "generating")
-
-            try:
-                # Build command with output directories
-                command = card.get_command(self.model, self.style)
-
-                # Add output directory parameters with absolute paths
-                cards_dir_abs = self.cards_dir.absolute()
-                images_dir_abs = self.images_dir.absolute()
-                command += f" --output {escape_for_shell(str(cards_dir_abs))}"
-                command += f" --images-output {escape_for_shell(str(images_dir_abs))}"
-
-                self.log_message.emit(
-                    "DEBUG",
-                    f"Output directories: cards={cards_dir_abs}, images={images_dir_abs}",
-                )
-
-                # Check if this is card-only regeneration
-                if (
-                    hasattr(self, "regeneration_type")
-                    and self.regeneration_type == "card_only"
-                ):
-                    self.log_message.emit(
-                        "INFO", f"Card-only regeneration mode for: {card.name}"
-                    )
-                    self.log_message.emit(
-                        "DEBUG", f"Existing artwork path: {card.image_path}"
-                    )
-
-                    # If we have an image path, use --custom-image instead of generating new artwork
-                    if card.image_path and Path(card.image_path).exists():
-                        # Use --custom-image flag with the existing artwork
-                        command += f" --custom-image {escape_for_shell(str(Path(card.image_path).absolute()))}"
-                        self.log_message.emit(
-                            "DEBUG",
-                            f"Using existing artwork with --custom-image: {card.image_path}",
-                        )
-                    else:
-                        # If no existing image, still skip image generation (will use placeholder)
-                        command += " --skip-image"
-                        self.log_message.emit(
-                            "WARNING",
-                            "No existing artwork found for card-only regeneration",
-                        )
-                else:
-                    # Normal generation or regeneration with new image
-                    self.log_message.emit(
-                        "INFO", f"Full generation mode for: {card.name}"
-                    )
-
-                self.log_message.emit("DEBUG", f"Command: {command}")
-
-                # Execute command
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=os.path.dirname(os.path.abspath(__file__)),
-                )
-
-                # Log ALL output from the subprocess
-                if result.stdout:
-                    # Split stdout by lines and log each line
-                    for line in result.stdout.strip().split("\n"):
-                        if line.strip():
-                            # Parse the line to extract log level if present
-                            line_lower = line.lower()
-                            if "" in line or "SUCCESS" in line:
-                                self.log_message.emit("SUCCESS", line)
-                            elif "" in line or "ERROR" in line or "Failed" in line:
-                                self.log_message.emit("ERROR", line)
-                            elif any(
-                                err in line_lower
-                                for err in [
-                                    "missing",
-                                    "invalid",
-                                    "corrupted",
-                                    "black regions",
-                                    "too dark",
-                                ]
-                            ):
-                                self.log_message.emit(
-                                    "ERROR", f"[generate_card.py] {line}"
-                                )
-                            elif "" in line or "WARNING" in line:
-                                self.log_message.emit("WARNING", line)
-                            elif "" in line or "Generating" in line:
-                                self.log_message.emit("GENERATING", line)
-                            elif "INFO" in line or "" in line or "" in line:
-                                self.log_message.emit("INFO", line)
-                            elif "DEBUG" in line:
-                                self.log_message.emit("DEBUG", line)
-                            else:
-                                # Default to INFO for other output
-                                self.log_message.emit("INFO", line)
-
-                # Log stderr if there are errors
-                if result.stderr:
-                    for line in result.stderr.strip().split("\n"):
-                        if line.strip():
-                            self.log_message.emit("ERROR", f"[generate_card.py] {line}")
-
-                if result.returncode == 0:
-                    # Try to locate generated files in deck-specific directories
-                    safe_name = make_safe_filename(card.name)
-
-                    # List all files in output directory for debugging
-                    if self.cards_dir.exists():
-                        all_files = list(self.cards_dir.glob("*.png"))
-                        self.log_message.emit(
-                            "DEBUG",
-                            f"Files in cards directory: {[f.name for f in all_files]}",
-                        )
-
-                    # Find actual generated files
-                    default_card_path = None
-                    default_art_path = None
-
-                    # Use deck-specific directories
-                    cards_dir = self.cards_dir
-                    images_dir = self.images_dir
-
-                    # Check cards directory for files matching the pattern
-                    if cards_dir.exists():
-                        # Get the most recently created PNG file in the directory
-                        # This is more reliable than pattern matching for custom images
-                        recent_files = sorted(
-                            cards_dir.glob("*.png"),
-                            key=lambda p: p.stat().st_mtime,
-                            reverse=True,
-                        )
-
-                        if recent_files:
-                            # Check if the most recent file was created within last 10 seconds
-                            import time
-
-                            current_time = time.time()
-                            for recent_file in recent_files[
-                                :3
-                            ]:  # Check the 3 most recent files
-                                file_mtime = recent_file.stat().st_mtime
-                                if (
-                                    current_time - file_mtime < 10
-                                ):  # Created within last 10 seconds
-                                    default_card_path = recent_file
-                                    self.log_message.emit(
-                                        "INFO",
-                                        f"Found recently generated card at: {default_card_path}",
-                                    )
-                                    break
-
-                        # If not found by recency, try pattern matching
-                        if not default_card_path:
-                            # First try with normal safe name
-                            normal_safe_name = card.name.replace(" ", "_").replace(
-                                "/", "_"
-                            )
-                            pattern = f"{normal_safe_name}_*.png"
-                            matching_files = list(cards_dir.glob(pattern))
-
-                            # If not found, try with the heavily escaped safe name
-                            if not matching_files:
-                                pattern = f"{safe_name}_*.png"
-                                matching_files = list(cards_dir.glob(pattern))
-
-                            if matching_files:
-                                # Get the most recent file
-                                matching_files.sort(
-                                    key=lambda p: p.stat().st_mtime, reverse=True
-                                )
-                                default_card_path = matching_files[0]
-                                self.log_message.emit(
-                                    "INFO", f"Found card image at: {default_card_path}"
-                                )
-
-                    # If not found in cards, check images directory
-                    if not default_card_path and images_dir.exists():
-                        pattern = f"{safe_name}_*.png"
-                        matching_files = list(images_dir.glob(pattern))
-                        if matching_files:
-                            matching_files.sort(
-                                key=lambda p: p.stat().st_mtime, reverse=True
-                            )
-                            default_card_path = matching_files[0]
-                            self.log_message.emit(
-                                "INFO", f"Found card image at: {default_card_path}"
-                            )
-
-                    # Also try exact name without timestamp as fallback
-                    if not default_card_path:
-                        primary_path = cards_dir / f"{safe_name}.png"
-                        if primary_path.exists():
-                            default_card_path = primary_path
-                            self.log_message.emit(
-                                "INFO", f"Found card image at: {primary_path}"
-                            )
-
-                    # If still not found, try to find any recent PNG files
-                    if not default_card_path and cards_dir.exists():
-                        recent_files = sorted(
-                            cards_dir.glob("*.png"),
-                            key=lambda p: p.stat().st_mtime,
-                            reverse=True,
-                        )
-                        if recent_files:
-                            # Take the most recent file that doesn't have _art in the name
-                            for f in recent_files:
-                                if "_art" not in f.name and "artwork" not in f.name:
-                                    default_card_path = f
-                                    self.log_message.emit(
-                                        "INFO", f"Using most recent card file: {f}"
-                                    )
-                                    break
-
-                    # Check for art/image files in output/images/
-                    if images_dir.exists():
-                        # Look for artwork with various naming patterns
-                        art_patterns = [
-                            f"{safe_name}.jpg",
-                            f"{safe_name}.jpeg",
-                            f"{safe_name}.png",
-                            f"{card.name.split(',')[0].strip()}.jpg",  # Try simple name (e.g., "Mountain" for "Mountain, Basic")
-                            f"{card.name.split(',')[0].strip()}.jpeg",
-                            f"{card.name.split(',')[0].strip()}.png",
-                        ]
-
-                        for pattern in art_patterns:
-                            art_path = images_dir / pattern
-                            if art_path.exists():
-                                default_art_path = art_path
-                                self.log_message.emit(
-                                    "INFO", f"Found artwork at: {art_path}"
-                                )
-                                break
-
-                    # Check for art files
-                    if default_card_path and not default_art_path:
-                        # Try to find corresponding art file
-                        base_name = default_card_path.stem
-                        possible_art_names = [
-                            f"{base_name}_art",
-                            f"{base_name}_artwork",
-                            f"{base_name}-art",
-                            base_name.replace("_card", "_art"),
-                        ]
-
-                        for art_name in possible_art_names:
-                            art_path = default_card_path.parent / f"{art_name}.png"
-                            if art_path.exists():
-                                default_art_path = art_path
-                                self.log_message.emit(
-                                    "INFO", f"Found art image at: {art_path}"
-                                )
-                                break
-
-                    # Use the actual generated file paths
-                    card_path = ""
-                    image_path = ""
-
-                    if default_card_path and default_card_path.exists():
-                        # For custom images, keep the original filename from generation
-                        # Don't rename to safe_name as it may not match
-                        if self.style == "custom_image":
-                            final_path = default_card_path
-                        else:
-                            # Target path without timestamp for non-custom images
-                            final_path = self.cards_dir / f"{safe_name}.png"
-
-                        try:
-                            # Validate the generated card before saving
-                            import numpy as np
-                            from PIL import Image
-
-                            # Open and check the image
-                            with Image.open(default_card_path) as img:
-                                # Convert to RGB if needed
-                                if img.mode != "RGB":
-                                    img = img.convert("RGB")
-
-                                # Check if image is mostly black (potential rendering error)
-                                img_array = np.array(img)
-                                # Calculate average brightness (0-255)
-                                avg_brightness = img_array.mean()
-
-                                # Check different regions of the card for black sections
-                                height, width = img_array.shape[:2]
-
-                                # Sample regions
-                                regions = {
-                                    "top (title/cost)": img_array[: height // 4],
-                                    "upper-middle (artwork)": img_array[
-                                        height // 4 : height // 2
-                                    ],
-                                    "lower-middle (type/text)": img_array[
-                                        height // 2 : 3 * height // 4
-                                    ],
-                                    "bottom (P/T)": img_array[3 * height // 4 :],
-                                }
-
-                                # Check each region
-                                black_regions = []
-                                for region_name, region_data in regions.items():
-                                    region_brightness = region_data.mean()
-                                    self.log_message.emit(
-                                        "DEBUG",
-                                        f"Region '{region_name}' brightness: {region_brightness:.1f}/255",
-                                    )
-                                    if region_brightness < 30:
-                                        black_regions.append(region_name)
-
-                                # If image is too dark, it's likely a rendering error
-                                if avg_brightness < 30:
-                                    self.log_message.emit(
-                                        "ERROR",
-                                        f"Card appears corrupted (brightness: {avg_brightness:.1f}/255)",
-                                    )
-                                    self.log_message.emit(
-                                        "ERROR",
-                                        f"Black regions: {', '.join(black_regions) if black_regions else 'entire card'}",
-                                    )
-
-                                    # Log card data for debugging
-                                    self.log_message.emit("ERROR", "Card data debug:")
-                                    self.log_message.emit(
-                                        "ERROR", f"  Name: {card.name}"
-                                    )
-                                    self.log_message.emit(
-                                        "ERROR", f"  Cost: {card.cost}"
-                                    )
-                                    self.log_message.emit(
-                                        "ERROR", f"  Type: {card.type}"
-                                    )
-                                    self.log_message.emit(
-                                        "ERROR", f"  P/T: {card.power}/{card.toughness}"
-                                    )
-                                    self.log_message.emit(
-                                        "ERROR", f"  Rarity: {card.rarity}"
-                                    )
-
-                                    # Check if it's a creature without P/T
-                                    if card.is_creature() and (
-                                        not card.power or not card.toughness
-                                    ):
-                                        self.log_message.emit(
-                                            "ERROR", " Creature missing P/T values!"
-                                        )
-
-                                    raise Exception(
-                                        f"Card corrupted (black in: {', '.join(black_regions)})"
-                                    )
-                                elif black_regions:
-                                    self.log_message.emit(
-                                        "WARNING",
-                                        f"Card has black regions in: {', '.join(black_regions)}",
-                                    )
-                                    self.log_message.emit(
-                                        "WARNING",
-                                        f"May indicate missing data for: {card.name}",
-                                    )
-
-                            # For custom images, just use the path as-is
-                            # For other images, rename to remove timestamp
-                            if (
-                                self.style == "custom_image"
-                                or final_path == default_card_path
-                            ):
-                                # Don't move/rename for custom images
-                                card_path = str(default_card_path)
-                            else:
-                                # Move/rename the file to remove timestamp
-                                import shutil
-
-                                if final_path.exists():
-                                    final_path.unlink()  # Remove old file if exists
-                                shutil.move(str(default_card_path), str(final_path))
-                                card_path = str(final_path)
-                            self.log_message.emit(
-                                "INFO", f"Card saved: {final_path.name}"
-                            )
-
-                            # Clean up JSON file if it exists
-                            json_path = default_card_path.with_suffix(".json")
-                            if json_path.exists():
-                                try:
-                                    json_path.unlink()
-                                    self.log_message.emit(
-                                        "DEBUG", f"Cleaned up JSON: {json_path.name}"
-                                    )
-                                except:
-                                    pass
-                        except Exception as e:
-                            # If move fails, use the original path
-                            card_path = str(default_card_path)
-                            self.log_message.emit(
-                                "WARNING", f"Could not rename file: {e}"
-                            )
-                    else:
-                        self.log_message.emit(
-                            "WARNING", f"No card image found for {card.name}"
-                        )
-
-                    # Set image_path from artwork if found
-                    if default_art_path and default_art_path.exists():
-                        image_path = str(default_art_path)
-
-                    # Log the successful generation with file paths
-                    # Make sure we have absolute paths
-                    if card_path and not Path(card_path).is_absolute():
-                        card_path = str(Path(card_path).resolve())
-                    if image_path and not Path(image_path).is_absolute():
-                        image_path = str(Path(image_path).resolve())
-
-                    # Debug: log what we're emitting
-                    self.log_message.emit(
-                        "DEBUG",
-                        f"Emitting completed signal for card {card.name} with ID: {card.id}",
-                    )
-                    self.log_message.emit("DEBUG", f"Card path: {card_path}")
-                    self.log_message.emit("DEBUG", f"Image path: {image_path}")
-                    self.completed.emit(
-                        card.id,
-                        True,
-                        "Card generated successfully",
-                        image_path,
-                        card_path,
-                    )
-                else:
-                    # Command failed - log detailed error information
-                    error_msg = (
-                        result.stderr
-                        if result.stderr
-                        else "Command failed with no error message"
-                    )
-
-                    self.log_message.emit(
-                        "ERROR", f"Card generation failed for: {card.name}"
-                    )
-                    self.log_message.emit("ERROR", f"Exit code: {result.returncode}")
-
-                    # Log any stdout that might contain error info
-                    if result.stdout:
-                        for line in result.stdout.strip().split("\n"):
-                            if line.strip():
-                                self.log_message.emit("ERROR", f"[stdout] {line}")
-
-                    # Log stderr
-                    if result.stderr:
-                        for line in result.stderr.strip().split("\n"):
-                            if line.strip():
-                                self.log_message.emit("ERROR", f"[stderr] {line}")
-
-                    self.completed.emit(card.id, False, error_msg, "", "")
-                    # Stop on error
-                    break
-
-            except Exception as e:
-                self.log_message.emit(
-                    "ERROR", f"Exception during card generation: {str(e)}"
-                )
-                self.completed.emit(card.id, False, str(e), "", "")
-                break
+# CardGeneratorWorker class moved to src/managers/card_generation_controller.py
 
 
 class ThemeConfigTab(QWidget):
@@ -1224,7 +686,9 @@ class ThemeConfigTab(QWidget):
         self.ai_worker.start()
 
     def generate_cards(self):
-        """Generate full deck of 100 cards"""
+        """Delegate to controller"""
+        # Note: This method generates deck via AI, not individual card images
+        # The actual implementation remains here for now as it's AI-based deck creation
         theme = self.get_theme()
         analysis = self.output_text.toPlainText()
         colors = self.get_colors()
@@ -2563,57 +2027,33 @@ class CardManagementTab(QWidget):
                     parent.log_message("INFO", f"Updated art prompt for {card.name}")
 
     def generate_missing(self):
-        """Generate only cards that haven't been generated yet"""
-        missing_cards = [
-            card
-            for card in self.cards
-            if not hasattr(card, "status") or card.status == "pending"
-        ]
-
-        if not missing_cards:
-            QMessageBox.information(
-                self, "All Complete", "All cards have been generated!"
-            )
-            return
-
-        if hasattr(self, "generator_worker"):
-            self.generator_worker.set_cards(
-                missing_cards,
+        """Delegate to controller"""
+        parent = get_main_window()
+        if parent and hasattr(parent, "generation_controller"):
+            result = parent.generation_controller.generate_missing(
+                self.cards,
                 self.model_combo.currentText()
                 if hasattr(self, "model_combo")
                 else "sdxl",
                 self.style_combo.currentText()
                 if hasattr(self, "style_combo")
                 else "mtg_modern",
+                parent.current_deck_name
+                if hasattr(parent, "current_deck_name")
+                else None,
             )
-            self.generator_worker.start()
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO", f"Generating {len(missing_cards)} missing cards"
-                )
+            if "All cards have been generated" in result:
+                QMessageBox.information(self, "All Complete", result)
 
     def generate_art_descriptions(self):
-        """Generate art descriptions for cards using AI"""
-        if not self.cards:
-            QMessageBox.warning(self, "No Cards", "No cards to generate art for!")
-            return
-
+        """Delegate to controller"""
         parent = get_main_window()
-        if parent and hasattr(parent, "deck_builder_tab"):
-            theme = getattr(parent.deck_builder_tab, "current_theme", "Fantasy")
-
-            cards_needing_art = [
-                card
-                for card in self.cards
-                if not hasattr(card, "art_prompt") or not card.art_prompt
-            ]
-
-            if not cards_needing_art:
-                QMessageBox.information(
-                    self, "Complete", "All cards have art descriptions!"
-                )
+        if parent and hasattr(parent, "generation_controller"):
+            result = parent.generation_controller.generate_art_descriptions(self.cards)
+            if "No cards to generate art for" in result:
+                QMessageBox.warning(self, "No Cards", result)
+            elif "All cards have art descriptions" in result:
+                QMessageBox.information(self, "Complete", result)
 
     def apply_queue_filter(self):
         """Deprecated - using single table now"""
@@ -2645,153 +2085,50 @@ class CardManagementTab(QWidget):
                     parent.log_message("INFO", f"Updated art prompt for {card.name}")
 
     def regenerate_selected_with_image(self):
-        """Regenerate selected cards with new images"""
+        """Delegate to controller"""
         selected_rows = self.table_manager.get_selected_rows()
-
         if not selected_rows:
             QMessageBox.warning(
                 self, "No Selection", "Please select cards to regenerate!"
             )
             return
 
-        cards_to_regenerate = []
-        for row in selected_rows:
-            if 0 <= row < len(self.cards):
-                card = self.cards[row]
-                card.status = "pending"
-                cards_to_regenerate.append(card)
-
-        if cards_to_regenerate:
-            self.refresh_generation_queue()
-
-            # Start generation with new images
-            self.generator_worker.set_cards(
-                cards_to_regenerate,
+        selected_cards = [
+            self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+        ]
+        parent = get_main_window()
+        if parent and hasattr(parent, "generation_controller"):
+            parent.generation_controller.regenerate_selected_with_image(
+                selected_cards,
                 self.model_combo.currentText(),
                 self.style_combo.currentText(),
-                "regeneration_with_image",
+                parent.current_deck_name
+                if hasattr(parent, "current_deck_name")
+                else None,
             )
-            self.generator_worker.start()
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO",
-                    f"Regenerating {len(cards_to_regenerate)} cards with new images",
-                )
 
     def regenerate_selected_card_only(self):
-        """Regenerate selected cards using existing artwork"""
+        """Delegate to controller"""
         selected_rows = self.table_manager.get_selected_rows()
-
         if not selected_rows:
             QMessageBox.warning(
                 self, "No Selection", "Please select cards to regenerate!"
             )
             return
 
-        cards_to_regenerate = []
-        for row in selected_rows:
-            if 0 <= row < len(self.cards):
-                card = self.cards[row]
-
-                # Check if artwork exists
-                safe_name = make_safe_filename(card.name)
-                artwork_found = False
-
-                # Get current deck name for deck-specific paths
-                parent = get_main_window()
-                deck_name = None
-                if parent and hasattr(parent, "current_deck_name"):
-                    deck_name = parent.current_deck_name
-
-                # Check deck-specific artwork directory FIRST (for custom images)
-                if deck_name:
-                    artwork_dir = Path("saved_decks") / deck_name / "artwork"
-                    if artwork_dir.exists():
-                        # Check for artwork with various extensions
-                        for ext in [".jpg", ".jpeg", ".png"]:
-                            artwork_path = artwork_dir / f"{safe_name}{ext}"
-                            if artwork_path.exists():
-                                artwork_found = True
-                                # UPDATE the card's image_path with the found artwork
-                                card.image_path = str(artwork_path)
-                                if parent and hasattr(parent, "log_message"):
-                                    parent.log_message(
-                                        "DEBUG", f"Found artwork at: {artwork_path}"
-                                    )
-                                    parent.log_message(
-                                        "DEBUG",
-                                        f"Updated card.image_path to: {card.image_path}",
-                                    )
-                                break
-
-                # If not found, check image_path (might be custom image path)
-                if (
-                    not artwork_found
-                    and hasattr(card, "image_path")
-                    and card.image_path
-                ):
-                    if Path(card.image_path).exists():
-                        artwork_found = True
-                        # Already has correct path
-                        if parent and hasattr(parent, "log_message"):
-                            parent.log_message(
-                                "DEBUG",
-                                f"Found artwork at image_path: {card.image_path}",
-                            )
-
-                # Finally check old output/images location as fallback
-                if not artwork_found:
-                    for ext in [".jpg", ".jpeg", ".png"]:
-                        artwork_path = Path(f"output/images/{safe_name}{ext}")
-                        if artwork_path.exists():
-                            artwork_found = True
-                            # UPDATE the card's image_path with the found artwork
-                            card.image_path = str(artwork_path)
-                            if parent and hasattr(parent, "log_message"):
-                                parent.log_message(
-                                    "DEBUG",
-                                    f"Found artwork at output/images: {artwork_path}",
-                                )
-                                parent.log_message(
-                                    "DEBUG",
-                                    f"Updated card.image_path to: {card.image_path}",
-                                )
-                            break
-
-                if not artwork_found:
-                    reply = QMessageBox.question(
-                        self,
-                        "No Artwork",
-                        f"No artwork found for '{card.name}'. Generate with new artwork instead?",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    )
-                    if reply == QMessageBox.StandardButton.Yes:
-                        card.status = "pending"
-                        cards_to_regenerate.append(card)
-                else:
-                    card.status = "pending"
-                    cards_to_regenerate.append(card)
-
-        if cards_to_regenerate:
-            self.refresh_generation_queue()
-
-            # Start card-only regeneration
-            self.generator_worker.set_cards(
-                cards_to_regenerate,
+        selected_cards = [
+            self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+        ]
+        parent = get_main_window()
+        if parent and hasattr(parent, "generation_controller"):
+            parent.generation_controller.regenerate_selected_card_only(
+                selected_cards,
                 self.model_combo.currentText(),
                 self.style_combo.currentText(),
-                "card_only_regeneration",
+                parent.current_deck_name
+                if hasattr(parent, "current_deck_name")
+                else None,
             )
-            self.generator_worker.start()
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO",
-                    f"Regenerating {len(cards_to_regenerate)} cards (keeping artwork)",
-                )
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
@@ -3727,6 +3064,10 @@ class MTGDeckBuilder(QMainWindow):
         self.current_preview_card = None  # Track for resize events
         self.current_deck_name = None  # Track active deck name
         self.last_loaded_deck_path = None  # Track last loaded deck for auto-loading
+
+        # Initialize generation controller
+        self.generation_controller = CardGenerationController(self)
+
         self.init_ui()
         self.load_settings()
         self.setup_status_timer()
