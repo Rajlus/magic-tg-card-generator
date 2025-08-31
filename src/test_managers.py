@@ -6,7 +6,8 @@ Simple test script to validate the manager classes
 
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QTableWidget, QComboBox, QLineEdit, QLabel
-from CardTableManager import CardTableManager, MTGCard
+from CardTableManager import CardTableManager
+from src.domain.models import MTGCard
 from CardFileOperations import CardFileOperations
 from CardGenerationController import CardGenerationController
 from CardFilterManager import CardFilterManager

@@ -19,7 +19,7 @@ sys.path.append('src')
 from managers.card_file_operations import CardFileOperations
 
 # Import the main MTGCard class
-from mtg_deck_builder import MTGCard
+from src.domain.models import MTGCard
 
 
 class TestCardFileOperations:

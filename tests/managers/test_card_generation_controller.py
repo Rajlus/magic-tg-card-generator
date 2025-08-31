@@ -47,7 +47,7 @@ from managers.card_generation_controller import (
 
 # Import MTGCard for testing
 try:
-    from mtg_deck_builder import MTGCard
+    from src.domain.models import MTGCard
 except ImportError:
     # Create a mock MTGCard class for testing
     class MTGCard:
