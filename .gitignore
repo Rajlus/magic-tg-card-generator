@@ -178,7 +178,8 @@ secrets.json
 /.claude-flow/metrics/task-metrics.json
 /test_png_output/
 # Ignore test output and temporary files
-test_*.py
+# BUT NOT test files in the tests/ directory!
+/test_*.py
 percy_test.txt
 test_png_output/
 output/all_cards/
