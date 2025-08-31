@@ -73,7 +73,10 @@ else:
 
         def escape_for_shell(text: str) -> str:
             """Escape text for shell command."""
-            return f'"${text}"'
+            # Replace double quotes with escaped double quotes
+            text = str(text).replace('"', '\\"')
+            # Return with double quotes around it
+            return f'"{text}"'
 
 
 # Protocol definitions for dependency injection
@@ -363,13 +366,14 @@ class CardGeneratorWorker(QThread):
 
                 self.log_message.emit("DEBUG", f"Command: {command}")
 
-                # Execute command
+                # Execute command from project root directory
+                project_root = Path(__file__).parent.parent.parent
                 result = subprocess.run(
                     command,
                     shell=True,
                     capture_output=True,
                     text=True,
-                    cwd=os.path.dirname(os.path.abspath(__file__)),
+                    cwd=str(project_root),
                 )
 
                 # Log ALL output from the subprocess

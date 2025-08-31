@@ -3794,7 +3794,14 @@ class MTGDeckBuilder(QMainWindow):
         self.update_status("ready", "")
         self.log_message("SUCCESS", "Image generation complete!")
 
-    def on_card_generation_completed(self, card_id, success: bool, message: str):
+    def on_card_generation_completed(
+        self,
+        card_id,
+        success: bool,
+        message: str,
+        image_path: str = "",
+        card_path: str = "",
+    ):
         """Handle individual card completion"""
         # Debug to understand ID issues
         self.log_message(
@@ -3803,6 +3810,42 @@ class MTGDeckBuilder(QMainWindow):
         )
         if success:
             self.log_message("SUCCESS", f"Card {card_id} generated successfully")
+
+            # Update the card's paths if provided
+            if hasattr(self.cards_tab, "crud_manager") and self.cards_tab.crud_manager:
+                cards_list = self.cards_tab.crud_manager.cards
+                card_updated = False
+                for card in cards_list:
+                    if str(card.id) == str(card_id):
+                        # Update the card's paths
+                        if card_path:
+                            card.card_path = card_path
+                            card_updated = True
+                        if image_path:
+                            card.image_path = image_path
+                            card_updated = True
+
+                        # Update status to completed
+                        card.status = "completed"
+                        card.generated_at = datetime.now().isoformat()
+
+                        # Check if this card is currently selected
+                        current_row = self.cards_tab.table.currentRow()
+                        if 0 <= current_row < len(cards_list):
+                            selected_card = cards_list[current_row]
+                            if selected_card.id == card.id:
+                                # This is the currently selected card, update preview
+                                self.log_message(
+                                    "DEBUG",
+                                    f"Updating preview for just-generated card: {card.name}",
+                                )
+                                self.update_card_preview(card)
+                        break
+
+                # Auto-save the deck after successful generation
+                if card_updated:
+                    self.log_message("DEBUG", "Auto-saving deck after card generation")
+                    self.auto_save_deck(cards_list, new_generation=False)
         else:
             self.log_message("ERROR", f"Card {card_id} failed: {message}")
 
