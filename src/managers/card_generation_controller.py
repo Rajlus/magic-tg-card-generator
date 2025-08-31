@@ -23,60 +23,62 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QInputDialog, QMessageBox, QProgressBar, QWidget
 
-# Import the main MTGCard class to ensure compatibility
+# Import domain model
 if TYPE_CHECKING:
-    # Avoid potential circular imports at runtime by using TYPE_CHECKING
-    from mtg_deck_builder import MTGCard
+    from src.domain.models import MTGCard
 else:
-    # Import at runtime - this is safe since mtg_deck_builder doesn't import this module directly
-    # Add the root directory to the path to find mtg_deck_builder
-    root_path = Path(__file__).parent.parent.parent
-    if str(root_path) not in sys.path:
-        sys.path.insert(0, str(root_path))
-
+    # Try to import from domain model first (PR branch)
     try:
-        from mtg_deck_builder import MTGCard, escape_for_shell, make_safe_filename
+        from src.domain.models import MTGCard, escape_for_shell, make_safe_filename
     except ImportError:
-        # Fallback to a protocol definition if import fails
-        from typing import Protocol
+        # Fallback to importing from mtg_deck_builder (main branch)
+        root_path = Path(__file__).parent.parent.parent
+        if str(root_path) not in sys.path:
+            sys.path.insert(0, str(root_path))
 
-        class MTGCard(Protocol):
-            """Protocol defining the MTGCard interface for type hints."""
+        try:
+            from mtg_deck_builder import MTGCard, escape_for_shell, make_safe_filename
+        except ImportError:
+            # Final fallback to protocol definition
+            from typing import Protocol
 
-            id: int
-            name: str
-            type: str
-            cost: Optional[str]
-            text: Optional[str]
-            power: Optional[int]
-            toughness: Optional[int]
-            flavor: Optional[str]
-            rarity: Optional[str]
-            art: Optional[str]
-            status: str
-            image_path: Optional[str]
-            card_path: Optional[str]
-            generated_at: Optional[str]
+            class MTGCard(Protocol):
+                """Protocol defining the MTGCard interface for type hints."""
 
-            def get_command(self, model: str, style: str) -> str:
-                """Get the command to generate this card."""
-                ...
+                id: int
+                name: str
+                type: str
+                cost: Optional[str]
+                text: Optional[str]
+                power: Optional[int]
+                toughness: Optional[int]
+                flavor: Optional[str]
+                rarity: Optional[str]
+                art: Optional[str]
+                status: str
+                image_path: Optional[str]
+                card_path: Optional[str]
+                generated_at: Optional[str]
 
-            def is_creature(self) -> bool:
-                """Check if this card is a creature."""
-                ...
+                def get_command(self, model: str, style: str) -> str:
+                    """Get the command to generate this card."""
+                    ...
 
-        # Fallback functions if import fails
-        def make_safe_filename(name: str) -> str:
-            """Convert a card name to a safe filename."""
-            return name.replace(" ", "_").replace("/", "_")
+                def is_creature(self) -> bool:
+                    """Check if this card is a creature."""
+                    ...
 
-        def escape_for_shell(text: str) -> str:
-            """Escape text for shell command."""
-            # Replace double quotes with escaped double quotes
-            text = str(text).replace('"', '\\"')
-            # Return with double quotes around it
-            return f'"{text}"'
+            # Fallback functions if import fails
+            def make_safe_filename(name: str) -> str:
+                """Convert a card name to a safe filename."""
+                return name.replace(" ", "_").replace("/", "_")
+
+            def escape_for_shell(text: str) -> str:
+                """Escape text for shell command."""
+                # Replace double quotes with escaped double quotes
+                text = str(text).replace('"', '\\"')
+                # Return with double quotes around it
+                return f'"{text}"'
 
 
 # Protocol definitions for dependency injection

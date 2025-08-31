@@ -22,7 +22,7 @@ from src.managers.card_crud_manager import CardCRUDManager
 
 # Import MTGCard
 try:
-    from mtg_deck_builder import MTGCard
+    from src.domain.models import MTGCard
 except ImportError:
     # Create a mock MTGCard for testing
     class MTGCard:

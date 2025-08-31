@@ -20,40 +20,11 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol
 import yaml
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget
 
-# Import the main MTGCard class to ensure compatibility
+# Import domain model
 if TYPE_CHECKING:
-    # Avoid potential circular imports at runtime by using TYPE_CHECKING
-    from mtg_deck_builder import MTGCard
+    from src.domain.models import MTGCard
 else:
-    # Import at runtime - this is safe since mtg_deck_builder doesn't import this module directly
-    # Add the root directory to the path to find mtg_deck_builder
-    root_path = Path(__file__).parent.parent.parent
-    if str(root_path) not in sys.path:
-        sys.path.insert(0, str(root_path))
-
-    try:
-        from mtg_deck_builder import MTGCard
-    except ImportError:
-        # Fallback to a protocol definition if import fails
-        from typing import Protocol
-
-        class MTGCard(Protocol):
-            """Protocol defining the MTGCard interface for type hints."""
-
-            id: int
-            name: str
-            type: str
-            cost: Optional[str]
-            text: Optional[str]
-            power: Optional[int]
-            toughness: Optional[int]
-            flavor: Optional[str]
-            rarity: Optional[str]
-            art: Optional[str]
-            status: str
-            image_path: Optional[str]
-            card_path: Optional[str]
-            generated_at: Optional[str]
+    from src.domain.models import MTGCard
 
 
 # Protocol definitions for dependency injection

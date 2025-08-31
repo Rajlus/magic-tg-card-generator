@@ -32,12 +32,8 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.insert(0, str(root_path))
 
-# Import MTGCard
-try:
-    from mtg_deck_builder import MTGCard
-except ImportError:
-    # Fallback import for testing
-    MTGCard = None
+# Import domain model
+from src.domain.models import MTGCard
 
 
 def get_main_window():
