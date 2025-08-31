@@ -52,6 +52,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.managers.card_table_manager import CardTableManager
+
 load_dotenv()
 
 
@@ -1392,7 +1394,13 @@ class CardManagementTab(QWidget):
         self.generator_worker.completed.connect(self.on_generation_completed)
         self.generation_queue = []  # Track generation queue
 
+        # Initialize cards list
+        self.cards = []
+
         self.init_ui()
+
+        # Initialize table manager after UI is set up
+        self._setup_table_manager()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -1460,7 +1468,7 @@ class CardManagementTab(QWidget):
                 "Enchantments",
             ]
         )
-        self.filter_combo.currentTextChanged.connect(self.apply_filter)
+        # Filter connections now handled by table manager
         filter_layout.addWidget(self.filter_combo)
 
         # Add status filter
@@ -1469,12 +1477,12 @@ class CardManagementTab(QWidget):
         self.status_filter_combo.addItems(
             ["All", "✅ Completed", "⏸️ Pending", "❌ Failed", "🔄 Generating"]
         )
-        self.status_filter_combo.currentTextChanged.connect(self.apply_filter)
+        # Status filter connections now handled by table manager
         filter_layout.addWidget(self.status_filter_combo)
 
         filter_layout.addWidget(QLabel("Search:"))
         self.search_input = QLineEdit()
-        self.search_input.textChanged.connect(self.apply_filter)
+        # Search filter connections now handled by table manager
         filter_layout.addWidget(self.search_input)
 
         # Add filter result label
@@ -1548,17 +1556,15 @@ class CardManagementTab(QWidget):
         # Sorting disabled
         # self.sort_order = {}  # Column index -> Qt.SortOrder
 
-        # Connect itemChanged signal to auto-save when cells are edited
-        self.table.itemChanged.connect(self.on_table_item_changed)
+        # Table item connections now handled by table manager
 
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
         # Add context menu for right-click
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        # Context menu connections now handled by table manager
 
-        # Connect selection change to update button visibility
-        self.table.itemSelectionChanged.connect(self.update_button_visibility)
+        # Selection change connections now handled by table manager
 
         layout.addWidget(self.table)
 
@@ -1766,56 +1772,60 @@ class CardManagementTab(QWidget):
         # Store commander colors for validation
         self.commander_colors = set()
 
-    # Sorting method removed - was broken
-    # def sort_by_column(self, column: int):
-    #     pass
+    def _setup_table_manager(self):
+        """Initialize and configure the table manager."""
+        # Create the table manager
+        self.table_manager = CardTableManager(self.table, self.cards)
 
-    def on_table_item_changed(self, item):
-        """Handle table item changes and auto-save deck"""
-        row = item.row()
-        column = item.column()
+        # Connect filter components to the manager
+        self.table_manager.set_filter_components(
+            self.filter_combo,
+            self.status_filter_combo,
+            self.search_input,
+            self.filter_result_label,
+        )
 
-        if row >= len(self.cards):
-            return
+        # Connect table manager signals
+        self.table_manager.item_changed.connect(self._on_table_manager_item_changed)
+        self.table_manager.selection_changed.connect(self.update_button_visibility)
+        self.table_manager.card_action_requested.connect(self._handle_card_action)
 
-        card = self.cards[row]
-        new_value = item.text()
+        # Remove original table signal connections since they're now handled by the manager
+        # Use contextlib.suppress to avoid errors if connections don't exist
+        with contextlib.suppress(Exception):
+            self.table.itemChanged.disconnect()
+        with contextlib.suppress(Exception):
+            self.table.customContextMenuRequested.disconnect()
+        with contextlib.suppress(Exception):
+            self.table.itemSelectionChanged.disconnect()
 
-        # Update the card based on which column was edited
-        # Columns: ID, Name, Cost, Type, Text, P/T, Rarity, Art, Status
-        if column == 0:  # ID
-            with contextlib.suppress(ValueError):
-                card.id = int(new_value)
-        elif column == 1:  # Name
-            card.name = new_value
-        elif column == 2:  # Cost
-            card.cost = new_value
-        elif column == 3:  # Type
-            card.type = new_value
-        elif column == 4:  # Text
-            card.text = new_value
-        elif column == 5:  # P/T
-            # Parse P/T like "2/3" or "*/4"
-            if "/" in new_value:
-                parts = new_value.split("/")
-                if len(parts) == 2:
-                    card.power = parts[0].strip()
-                    card.toughness = parts[1].strip()
-        elif column == 6:  # Rarity
-            card.rarity = new_value.lower()
-        elif column == 7:  # Art
-            card.art = new_value
-        elif column == 8:  # Status
-            card.status = new_value.lower()
-
+    def _on_table_manager_item_changed(self, card):
+        """Handle table item changes from the table manager."""
         # Auto-save the deck
         main_window = self.parent().parent() if hasattr(self, "parent") else None
         if main_window and hasattr(main_window, "auto_save_deck"):
             main_window.auto_save_deck(self.cards)
             if main_window and hasattr(main_window, "log_message"):
                 main_window.log_message(
-                    "DEBUG", f"Auto-saved deck after editing {card.name} ({column=})"
+                    "DEBUG", f"Auto-saved deck after editing {card.name}"
                 )
+
+    def _handle_card_action(self, action: str, data):
+        """Handle card action requests from the table manager."""
+        if action == "add":
+            self.add_new_card()
+        elif action == "edit" and data:
+            self.edit_card()
+        elif action == "duplicate" and data:
+            self.duplicate_selected_card()
+        elif action == "delete" and data:
+            self.delete_selected_cards()
+        elif action == "regenerate" and data:
+            self.regenerate_selected_card()
+
+    # Sorting method removed - was broken
+    # def sort_by_column(self, column: int):
+    #     pass
 
     def get_commander_colors(self) -> set:
         """Get the color identity of the commander (first card or legendary creature)"""
@@ -1914,22 +1924,6 @@ class CardManagementTab(QWidget):
                 )
 
         return violation
-
-    def get_selected_rows(self) -> set[int]:
-        """
-        Get the set of currently selected row indices from the table.
-
-        Returns:
-            set[int]: A set containing the row indices of all selected items.
-                     Returns an empty set if no rows are selected.
-
-        Example:
-            selected_rows = self.get_selected_rows()
-            if not selected_rows:
-                QMessageBox.warning(self, "No Selection", "Please select cards!")
-                return
-        """
-        return {item.row() for item in self.table.selectedItems()}
 
     def load_deck(self):
         """Open file dialog to load a deck"""
@@ -2149,7 +2143,7 @@ class CardManagementTab(QWidget):
         self.sync_card_status_with_rendered_files()
 
         # Refresh the display
-        self.refresh_table()
+        self.table_manager.refresh_table()
         self.update_stats()
         self.update_generation_stats()
 
@@ -2287,7 +2281,7 @@ class CardManagementTab(QWidget):
 
     def update_button_visibility(self):
         """Update visibility of buttons based on selection"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         # Check status of selected cards
         has_generated = False
@@ -2489,7 +2483,7 @@ class CardManagementTab(QWidget):
 
         if reply == QMessageBox.StandardButton.Yes:
             self.cards = []
-            self.refresh_table()
+            self.table_manager.refresh_table()
             self.update_stats()
             self.update_generation_stats()
 
@@ -2542,11 +2536,11 @@ class CardManagementTab(QWidget):
             new_card.status = "pending"
 
             self.cards.append(new_card)
-            self.refresh_table()
+            self.table_manager.refresh_table()
 
     def delete_selected_cards(self):
         """Delete selected cards from the deck"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards to delete!")
@@ -2564,13 +2558,13 @@ class CardManagementTab(QWidget):
                 if 0 <= row < len(self.cards):
                     del self.cards[row]
 
-            self.refresh_table()
+            self.table_manager.refresh_table()
             self.update_stats()
             self.update_generation_stats()
 
     def edit_card(self):
         """Edit selected card details including art description"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select a card to edit!")
@@ -2677,11 +2671,11 @@ class CardManagementTab(QWidget):
                 card.art = art_input.toPlainText()
                 card.art_prompt = art_input.toPlainText()
 
-                self.refresh_table()
+                self.table_manager.refresh_table()
 
     def edit_selected_art_prompt(self):
         """Edit art prompt for selected card"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select a card!")
@@ -2792,7 +2786,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_with_image(self):
         """Regenerate selected cards with new images"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -2828,7 +2822,7 @@ class CardManagementTab(QWidget):
 
     def regenerate_selected_card_only(self):
         """Regenerate selected cards using existing artwork"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
@@ -2941,7 +2935,7 @@ class CardManagementTab(QWidget):
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -2997,7 +2991,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_files(self):
         """Delete generated files for selected cards"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -3046,7 +3040,7 @@ class CardManagementTab(QWidget):
                     card.generated_at = None
 
             self.refresh_generation_queue()
-            self.refresh_table()  # Also refresh the main table
+            self.table_manager.refresh_table()  # Also refresh the main table
 
             # Update preview if current card was affected
             current_row = self.table.currentRow()
@@ -3076,7 +3070,9 @@ class CardManagementTab(QWidget):
         # Log all cards with color violations
         self.log_color_violations()
 
-        self.refresh_table()
+        # Update the table manager with new cards and commander colors
+        self.table_manager.set_cards(self.cards)
+        self.table_manager.set_commander_colors(self.commander_colors)
         self.update_stats()
         self.update_generation_stats()
 
@@ -3151,144 +3147,6 @@ class CardManagementTab(QWidget):
             main_window.log_message(
                 "INFO", f"Commander colors allowed: {self.commander_colors}"
             )
-
-    def refresh_table(self):
-        """Refresh table display with color validation"""
-        # Temporarily disconnect itemChanged signal to avoid triggering saves during refresh
-        with contextlib.suppress(Exception):
-            self.table.itemChanged.disconnect()
-
-        self.table.setRowCount(len(self.cards))
-
-        # Get commander colors first
-        self.commander_colors = self.get_commander_colors()
-
-        # Sorting is already disabled
-        # self.table.setSortingEnabled(False)
-
-        for row, card in enumerate(self.cards):
-            # Check if this card violates commander color identity
-            violates_colors = self.check_color_violation(card.cost)
-
-            # ID column - use numeric sorting
-            id_item = QTableWidgetItem()
-            id_item.setData(Qt.ItemDataRole.DisplayRole, str(card.id))
-            id_item.setData(
-                Qt.ItemDataRole.UserRole, int(card.id)
-            )  # Store numeric value for sorting
-            if violates_colors:
-                id_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 0, id_item)
-
-            # Name column
-            name_item = QTableWidgetItem(card.name)
-            if violates_colors:
-                name_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 1, name_item)
-
-            # Cost column - highlight in stronger red since this is the violation source
-            cost_item = QTableWidgetItem(card.cost)
-            if violates_colors:
-                cost_item.setBackground(QBrush(QColor(255, 150, 150)))  # Stronger red
-                cost_item.setToolTip(
-                    f" Color violation! Contains colors not in commander identity: {self.commander_colors}"
-                )
-            self.table.setItem(row, 2, cost_item)
-
-            # Type column
-            type_item = QTableWidgetItem(card.type)
-            if violates_colors:
-                type_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 3, type_item)
-
-            # P/T column
-            pt = f"{card.power}/{card.toughness}" if card.power is not None else "-"
-            pt_item = QTableWidgetItem(pt)
-            if violates_colors:
-                pt_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 4, pt_item)
-
-            # Text column
-            text_item = QTableWidgetItem(
-                card.text[:50] + "..." if len(card.text) > 50 else card.text
-            )
-            if violates_colors:
-                text_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 5, text_item)
-
-            # Rarity column
-            rarity_item = QTableWidgetItem(card.rarity)
-            if violates_colors:
-                rarity_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 6, rarity_item)
-
-            # Art column
-            art_item = QTableWidgetItem(
-                card.art[:50] + "..." if len(card.art) > 50 else card.art
-            )
-            if violates_colors:
-                art_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 7, art_item)
-
-            # Generation Status column (8)
-            gen_status = getattr(card, "status", "pending")
-            if gen_status == "completed":
-                status_text = "✅ Done"
-                status_item = QTableWidgetItem(status_text)
-                if violates_colors:
-                    status_item.setBackground(
-                        QBrush(QColor(200, 150, 150))
-                    )  # Red-tinted green
-                else:
-                    status_item.setBackground(QBrush(QColor(100, 200, 100)))  # Green
-            elif gen_status == "generating":
-                status_text = "⏳ Processing"
-                status_item = QTableWidgetItem(status_text)
-                if violates_colors:
-                    status_item.setBackground(
-                        QBrush(QColor(255, 150, 100))
-                    )  # Red-tinted yellow
-                else:
-                    status_item.setBackground(QBrush(QColor(200, 200, 100)))  # Yellow
-            elif gen_status == "failed":
-                status_text = "❌ Failed"
-                status_item = QTableWidgetItem(status_text)
-                status_item.setBackground(QBrush(QColor(200, 100, 100)))  # Red
-            else:  # pending
-                status_text = "⏸️ Pending"
-                status_item = QTableWidgetItem(status_text)
-                if violates_colors:
-                    status_item.setBackground(
-                        QBrush(QColor(255, 200, 200))
-                    )  # Light red
-                else:
-                    status_item.setBackground(
-                        QBrush(QColor(220, 220, 220))
-                    )  # Light gray
-            self.table.setItem(row, 8, status_item)
-
-            # Image Status column (9)
-            has_image = (
-                hasattr(card, "card_path")
-                and card.card_path
-                and Path(card.card_path).exists()
-            ) or (
-                hasattr(card, "image_path")
-                and card.image_path
-                and Path(card.image_path).exists()
-            )
-
-            image_text = "🖼️ Yes" if has_image else "❌ No"
-            image_item = QTableWidgetItem(image_text)
-            if violates_colors:
-                image_item.setBackground(QBrush(QColor(255, 200, 200)))  # Light red
-            self.table.setItem(row, 9, image_item)
-
-        # Keep sorting disabled
-        self.table.setSortingEnabled(False)
-
-        # Reconnect itemChanged signal for auto-save
-        self.table.itemChanged.connect(self.on_table_item_changed)
 
     def update_generation_stats(self):
         """Update the generation progress indicator"""
@@ -3468,111 +3326,6 @@ class CardManagementTab(QWidget):
 
         self.color_label.setText(color_label_text)
 
-    def apply_filter(self):
-        """Apply filter to table"""
-        filter_text = self.filter_combo.currentText()
-        status_filter = (
-            self.status_filter_combo.currentText()
-            if hasattr(self, "status_filter_combo")
-            else "All"
-        )
-        search_text = self.search_input.text().lower()
-
-        visible_count = 0
-        total_count = self.table.rowCount()
-
-        for row in range(total_count):
-            show = True
-
-            # Type filter - check both English and German terms
-            if filter_text != "All":
-                card_type = self.table.item(row, 3).text().lower()
-                if (  # noqa: SIM114
-                    filter_text == "Creatures"
-                    and "kreatur" not in card_type
-                    and "creature" not in card_type
-                ):
-                    show = False
-                elif filter_text == "Lands" and "land" not in card_type:  # noqa: SIM114
-                    show = False
-                elif (  # noqa: SIM114
-                    filter_text == "Instants"
-                    and "spontanzauber" not in card_type
-                    and "instant" not in card_type
-                ):
-                    show = False
-                elif (  # noqa: SIM114
-                    filter_text == "Sorceries"
-                    and "hexerei" not in card_type
-                    and "sorcery" not in card_type
-                ):
-                    show = False
-                elif (  # noqa: SIM114
-                    filter_text == "Artifacts"
-                    and "artefakt" not in card_type
-                    and "artifact" not in card_type
-                ):
-                    show = False
-                elif (  # noqa: SIM114
-                    filter_text == "Enchantments"
-                    and "verzauberung" not in card_type
-                    and "enchantment" not in card_type
-                ):
-                    show = False
-
-            # Status filter
-            if show and status_filter != "All":
-                status_item = self.table.item(row, 8)  # Gen. Status column
-                if status_item:
-                    status_text = status_item.text().lower()
-                    if (
-                        status_filter == "✅ Completed" and "done" not in status_text
-                    ):  # noqa: SIM114
-                        show = False
-                    elif (
-                        status_filter == "⏸️ Pending" and "pending" not in status_text
-                    ):  # noqa: SIM114
-                        show = False
-                    elif (
-                        status_filter == "❌ Failed" and "failed" not in status_text
-                    ):  # noqa: SIM114
-                        show = False
-                    elif (  # noqa: SIM114
-                        status_filter == "🔄 Generating"
-                        and "generating" not in status_text
-                    ):
-                        show = False
-
-            # Search filter - search in ALL columns
-            if show and search_text:
-                found = False
-                # Check all columns for the search text
-                for col in range(self.table.columnCount()):
-                    item = self.table.item(row, col)
-                    if item and search_text in item.text().lower():
-                        found = True
-                        break
-
-                # If not found in any column, hide the row
-                if not found:
-                    show = False
-
-            self.table.setRowHidden(row, not show)
-            if show:
-                visible_count += 1
-
-        # Update filter result label
-        if filter_text != "All" or status_filter != "All" or search_text:
-            # Filters are active - show the label
-            hidden_count = total_count - visible_count
-            self.filter_result_label.setText(
-                f"📊 {visible_count}/{total_count} Cards - {hidden_count} Hidden"
-            )
-            self.filter_result_label.setVisible(True)
-        else:
-            # No filters active - hide the label
-            self.filter_result_label.setVisible(False)
-
     def add_new_card(self):
         """Add a new blank card to the deck"""
         # Find the next available ID (highest existing ID + 1)
@@ -3605,7 +3358,7 @@ class CardManagementTab(QWidget):
         self.cards.append(new_card)
 
         # Refresh table
-        self.refresh_table()
+        self.table_manager.refresh_table()
 
         # Select the new card (last row)
         last_row = self.table.rowCount() - 1
@@ -3623,40 +3376,6 @@ class CardManagementTab(QWidget):
         main_window = self.parent().parent() if hasattr(self, "parent") else None
         if main_window and hasattr(main_window, "log_message"):
             main_window.log_message("INFO", f"Added new card: {new_card.name}")
-
-    def show_context_menu(self, position):
-        """Show context menu on right-click"""
-        if not self.table.selectedItems():
-            return
-
-        menu = QMenu()
-
-        # Add actions
-        add_action = menu.addAction(" Add New Card")
-        edit_action = menu.addAction(" Edit Card")
-        duplicate_action = menu.addAction(" Duplicate Card")
-        menu.addSeparator()
-        delete_action = menu.addAction(" Delete Card(s)")
-        menu.addSeparator()
-        regenerate_action = menu.addAction(" Regenerate Card")
-
-        # Style delete action in red
-        delete_action.setStyleSheet("color: #ff6666;")
-
-        # Execute menu
-        action = menu.exec(self.table.mapToGlobal(position))
-
-        # Handle actions
-        if action == add_action:
-            self.add_new_card()
-        elif action == edit_action:
-            self.edit_card()
-        elif action == duplicate_action:
-            self.duplicate_selected_card()
-        elif action == delete_action:
-            self.delete_selected_cards()
-        elif action == regenerate_action:
-            self.regenerate_selected_card()
 
     def duplicate_selected_card(self):
         """Duplicate the selected card"""
@@ -3696,7 +3415,7 @@ class CardManagementTab(QWidget):
         self.cards.insert(current_row + 1, new_card)
 
         # Refresh and select the new card
-        self.refresh_table()
+        self.table_manager.refresh_table()
         self.table.selectRow(current_row + 1)
 
         # Auto-save
@@ -3721,7 +3440,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_cards(self):
         """Delete selected cards from the deck"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards to delete")
@@ -3747,7 +3466,7 @@ class CardManagementTab(QWidget):
                     del self.cards[row]
 
             # Refresh table
-            self.refresh_table()
+            self.table_manager.refresh_table()
 
             # Auto-save
             main_window_save = (
@@ -3819,7 +3538,7 @@ class CardManagementTab(QWidget):
             card.power = power_input.text() if power_input.text() else None
             card.toughness = toughness_input.text() if toughness_input.text() else None
 
-            self.refresh_table()
+            self.table_manager.refresh_table()
             self.cards_updated.emit(self.cards)
 
     # Preview is now handled by a permanent panel on the right side
@@ -3842,7 +3561,7 @@ class CardManagementTab(QWidget):
 
     def use_custom_image_for_selected(self):
         """Use custom image for selected cards"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -3898,7 +3617,7 @@ class CardManagementTab(QWidget):
 
     def delete_selected_files(self):
         """Delete generated files for selected cards"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(self, "No Selection", "Please select cards!")
@@ -3947,7 +3666,7 @@ class CardManagementTab(QWidget):
                     card.generated_at = None
 
             self.refresh_generation_queue()
-            self.refresh_table()  # Also refresh the main table
+            self.table_manager.refresh_table()  # Also refresh the main table
 
             # Update preview if current card was affected
             current_row = self.table.currentRow()
@@ -3962,7 +3681,7 @@ class CardManagementTab(QWidget):
 
     def refresh_cards_table(self):
         """Refresh the main cards table (renamed from refresh_table)"""
-        self.refresh_table()  # Call existing refresh_table method
+        self.table_manager.refresh_table()  # Call existing refresh_table method
 
     def on_generation_progress(self, card_id: int, status: str):
         """Handle generation progress updates"""
@@ -3986,7 +3705,7 @@ class CardManagementTab(QWidget):
 
             # Update the card status
             current_card.status = "generating"
-            self.refresh_table()
+            self.table_manager.refresh_table()
             self.update_generation_stats()  # Update generation progress
 
             parent = get_main_window()
@@ -4016,11 +3735,11 @@ class CardManagementTab(QWidget):
                 break
 
         # Update display
-        self.refresh_table()
+        self.table_manager.refresh_table()
         self.update_button_visibility()  # Update button visibility after refresh
         self.update_generation_stats()  # Update generation progress indicator
         # Re-apply filters after updating the table
-        self.apply_filter()
+        self.table_manager.apply_filter()
 
         # Update preview if this card is currently selected
         if success and updated_card:
@@ -4085,7 +3804,7 @@ class CardManagementTab(QWidget):
 
     def generate_selected_cards(self):
         """Generate only selected cards"""
-        selected_rows = self.get_selected_rows()
+        selected_rows = self.table_manager.get_selected_rows()
 
         if not selected_rows:
             QMessageBox.warning(
