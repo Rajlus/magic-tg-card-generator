@@ -24,10 +24,49 @@ try:
 
     OPENAI_AVAILABLE = True
 except ImportError:
+    OpenAI = None
     OPENAI_AVAILABLE = False
 
 
 class UnifiedCardGenerator:
+    # Image dimensions constants
+    MTG_ARTWORK_WIDTH = 626
+    MTG_ARTWORK_HEIGHT = 475
+
+    # Browser viewport dimensions
+    BROWSER_VIEWPORT_WIDTH = 1600
+    BROWSER_VIEWPORT_HEIGHT = 2400
+
+    # Timeout values (in milliseconds)
+    SHORT_TIMEOUT = 500
+    CARD_RENDER_TIMEOUT = 5000
+    ARTWORK_LOAD_TIMEOUT = 3000
+    PLACEHOLDER_TIMEOUT = 1000
+
+    # Image processing constants
+    IMAGE_QUALITY = 95
+    CARD_SCALE_FACTOR = 4
+
+    # File formatting constants
+    JSON_INDENT = 2
+
+    # File name sanitization characters
+    INVALID_FILENAME_CHARS = [
+        "/",
+        "\\",
+        ":",
+        "*",
+        "?",
+        '"',
+        "<",
+        ">",
+        "|",
+        "\u202f",
+        "\u00a0",
+        "—",
+        "–",
+    ]
+
     def __init__(
         self,
         output_dir: str = "output/cards",
@@ -247,7 +286,7 @@ class UnifiedCardGenerator:
         }
 
     def _generate_with_llm(self, prompt: str) -> dict:
-        """Generate card using OpenAI GPT."""
+        """Generate a card using OpenAI GPT."""
         system_prompt = """You are an expert Magic: The Gathering card designer.
         Create balanced, interesting cards. Return ONLY valid JSON with these fields:
         name, mana_cost, type_line, oracle_text, power (if creature), toughness (if creature),
@@ -282,9 +321,9 @@ class UnifiedCardGenerator:
         skip_image: bool = False,
         custom_image_path: Optional[str] = None,
     ):
-        """Create a card with provided details or generate from prompt."""
+        """Create a card with provided details or generate from a prompt."""
 
-        # Mode 1: Generate everything from prompt
+        # Mode 1: Generate everything from a prompt
         if prompt and not name:
             print(f"\n🤖 Generating card from prompt: '{prompt}'")
             card_data = self.generate_from_prompt(prompt)
@@ -358,27 +397,13 @@ class UnifiedCardGenerator:
                 from PIL import Image
 
                 safe_name = card_data["name"]
-                for char in [
-                    "/",
-                    "\\",
-                    ":",
-                    "*",
-                    "?",
-                    '"',
-                    "<",
-                    ">",
-                    "|",
-                    "\u202f",
-                    "\u00a0",
-                    "—",
-                    "–",
-                ]:
+                for char in self.INVALID_FILENAME_CHARS:
                     safe_name = safe_name.replace(char, "_")
                 safe_name = (
                     safe_name.replace(" ", "_").replace(",", "").replace("'", "")
                 )
 
-                # Create output directory if needed
+                # Create an output directory if needed
                 images_dir = self.images_dir
                 images_dir.mkdir(exist_ok=True, parents=True)
 
@@ -387,8 +412,8 @@ class UnifiedCardGenerator:
 
                 # MTG card artwork dimensions (approximate)
                 # The artwork area is roughly 626x475 pixels on a standard card
-                target_width = 626
-                target_height = 475
+                target_width = self.MTG_ARTWORK_WIDTH
+                target_height = self.MTG_ARTWORK_HEIGHT
 
                 # Convert to RGB if necessary (handles RGBA, etc.)
                 if img.mode != "RGB":
@@ -426,12 +451,12 @@ class UnifiedCardGenerator:
 
                 # Save the processed image
                 output_path = images_dir / f"{safe_name}.jpg"
-                img_final.save(output_path, "JPEG", quality=95)
+                img_final.save(output_path, "JPEG", quality=self.IMAGE_QUALITY)
 
                 card_data["image_uris"] = {"art_crop": str(output_path.absolute())}
                 print(f"   ✅ Custom image processed and saved to: {output_path}")
                 print(
-                    f"   📐 Image cropped and resized to {target_width}x{target_height}"
+                    f"   📐 Image cropped and resized to {self.MTG_ARTWORK_WIDTH}x{self.MTG_ARTWORK_HEIGHT}"
                 )
             else:
                 print(f"   ⚠️ Custom image not found: {custom_image_path}")
@@ -461,7 +486,7 @@ class UnifiedCardGenerator:
                         )
 
                 if not art_style:
-                    # Auto-select style based on card type
+                    # Auto-select style based on the card type
                     if "Dragon" in card_data.get("type_line", ""):
                         art_style = "mtg_classic"
                     elif "Demon" in card_data.get(
@@ -474,31 +499,17 @@ class UnifiedCardGenerator:
                 print(f"   Prompt: {art_description[:80]}...")
                 print(f"   Style: {art_style}")
 
-                # Sanitize the card name for use as filename
+                # Sanitize the card name for use as a filename
                 safe_name = card_data["name"]
                 # Replace problematic characters with underscores
-                for char in [
-                    "/",
-                    "\\",
-                    ":",
-                    "*",
-                    "?",
-                    '"',
-                    "<",
-                    ">",
-                    "|",
-                    "\u202f",
-                    "\u00a0",
-                    "—",
-                    "–",
-                ]:
+                for char in self.INVALID_FILENAME_CHARS:
                     safe_name = safe_name.replace(char, "_")
                 # Replace spaces, commas, and apostrophes
                 safe_name = (
                     safe_name.replace(" ", "_").replace(",", "").replace("'", "")
                 )
 
-                # Update output directory in config before generating
+                # Update the output directory in config before generating
                 self.image_generator.config["output_settings"]["output_dir"] = str(
                     self.images_dir
                 )
@@ -552,27 +563,13 @@ class UnifiedCardGenerator:
         # Make the name safe for filesystem - remove all problematic characters
         safe_name = card_data["name"]
         # Replace various types of spaces and special characters
-        for char in [
-            "/",
-            "\\",
-            ":",
-            "*",
-            "?",
-            '"',
-            "<",
-            ">",
-            "|",
-            "\u202f",
-            "\u00a0",
-            "—",
-            "–",
-        ]:
+        for char in self.INVALID_FILENAME_CHARS:
             safe_name = safe_name.replace(char, "_")
         safe_name = safe_name.replace(" ", "_").replace(",", "").replace("'", "")
         json_path = self.output_dir / f"{safe_name}_{timestamp}.json"
 
         with open(json_path, "w") as f:
-            json.dump(card_data, f, indent=2)
+            json.dump(card_data, f, indent=self.JSON_INDENT)
 
         # Render to PNG
         print("\n🖼️ Rendering Card...")
@@ -648,7 +645,7 @@ class UnifiedCardGenerator:
             art_style = (
                 styles[style_idx] if 0 <= style_idx < len(styles) else "mtg_modern"
             )
-        except:
+        except (ValueError, IndexError):
             art_style = style_input if style_input in styles else "mtg_modern"
 
         return {
@@ -706,7 +703,12 @@ class UnifiedCardGenerator:
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page(viewport={"width": 1600, "height": 2400})
+                page = await browser.new_page(
+                    viewport={
+                        "width": self.BROWSER_VIEWPORT_WIDTH,
+                        "height": self.BROWSER_VIEWPORT_HEIGHT,
+                    }
+                )
 
                 # Add console error logging
                 page.on(
@@ -722,15 +724,19 @@ class UnifiedCardGenerator:
                 await page.wait_for_load_state("networkidle")
 
                 print("   Filling card JSON...")
-                await page.fill("#card-json", json.dumps(card_json, indent=2))
-                await page.wait_for_timeout(500)
+                await page.fill(
+                    "#card-json", json.dumps(card_json, indent=self.JSON_INDENT)
+                )
+                await page.wait_for_timeout(self.SHORT_TIMEOUT)
 
                 print("   Clicking render button...")
                 await page.click("#render-button")
 
                 print("   Waiting for card to render...")
                 try:
-                    await page.wait_for_selector(".mtg-card", timeout=5000)
+                    await page.wait_for_selector(
+                        ".mtg-card", timeout=self.CARD_RENDER_TIMEOUT
+                    )
                 except Exception as e:
                     print(f"   ❌ Card rendering timeout: {e}")
                     # Take a screenshot for debugging
@@ -741,23 +747,23 @@ class UnifiedCardGenerator:
 
                 if "image_uris" in card_json:
                     print("   Waiting for artwork to load...")
-                    await page.wait_for_timeout(3000)
+                    await page.wait_for_timeout(self.ARTWORK_LOAD_TIMEOUT)
                 else:
                     print("   No artwork, using placeholder...")
-                    await page.wait_for_timeout(1000)
+                    await page.wait_for_timeout(self.PLACEHOLDER_TIMEOUT)
 
                 await page.evaluate(
-                    """
-                    () => {
+                    f"""
+                    () => {{
                         const card = document.querySelector('.mtg-card');
-                        if (card) {
-                            card.style.transform = 'scale(4)';
+                        if (card) {{
+                            card.style.transform = 'scale({self.CARD_SCALE_FACTOR})';
                             card.style.transformOrigin = 'top left';
-                        }
-                    }
+                        }}
+                    }}
                 """
                 )
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(self.SHORT_TIMEOUT)
 
                 card_element = await page.query_selector(".mtg-card")
                 if card_element:
