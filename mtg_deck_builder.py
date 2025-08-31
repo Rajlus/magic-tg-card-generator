@@ -58,6 +58,7 @@ from src.managers.card_generation_controller import (
     CardGenerationController,
     CardGeneratorWorker,
 )
+from src.managers.card_status_manager import CardStatusManager
 from src.managers.card_table_manager import CardTableManager
 from src.managers.card_validation_manager import CardValidationManager
 
@@ -877,6 +878,14 @@ class CardManagementTab(QWidget):
             self.cards, logger=self._create_logger()
         )
 
+        # Initialize status manager
+        self.status_manager = CardStatusManager(
+            cards=self.cards,
+            table_manager=self.table_manager,
+            file_operations=self.file_operations,
+            logger=self._create_logger(),
+        )
+
         # Initialize CRUD manager
         self.crud_manager = CardCRUDManager(
             parent_widget=self,
@@ -892,6 +901,15 @@ class CardManagementTab(QWidget):
         self.crud_manager.card_deleted.connect(self._on_card_deleted)
         self.crud_manager.cards_loaded.connect(self._on_cards_loaded)
         self.crud_manager.cards_updated.connect(self._on_cards_updated_from_crud)
+
+        # Connect status manager signals
+        self.status_manager.status_changed.connect(self._on_status_changed)
+        self.status_manager.batch_status_updated.connect(self._on_batch_status_updated)
+        self.status_manager.stats_updated.connect(self._on_stats_updated)
+
+        # Set the generation stats label in status manager (created in init_ui)
+        if hasattr(self, "generation_stats_label"):
+            self.status_manager.set_generation_stats_label(self.generation_stats_label)
 
     def _create_logger(self):
         """Create a logger compatible with CardFileOperations."""
@@ -926,19 +944,39 @@ class CardManagementTab(QWidget):
         """Handle card deletion from CRUD manager"""
         # Refresh stats after deletion
         self.update_stats()
-        self.update_generation_stats()
+        self.status_manager.update_generation_stats()
 
     def _on_cards_loaded(self, cards):
         """Handle cards loaded from CRUD manager"""
+        # Update status manager with new cards
+        self.status_manager.set_cards(cards)
         # Stats are updated by CRUD manager internally
         pass
 
     def _on_cards_updated_from_crud(self, cards):
         """Handle overall cards list update from CRUD manager"""
+        # Update status manager with new cards
+        self.status_manager.set_cards(cards)
         # Emit the signal to notify other components
         if hasattr(self, "cards_updated"):
             # The signal is already emitted by CRUD manager
             pass
+
+    # Status Manager Signal Handlers
+    def _on_status_changed(self, card, old_status, new_status):
+        """Handle status change from status manager"""
+        # Table refresh is handled by status manager
+        pass
+
+    def _on_batch_status_updated(self, cards, new_status):
+        """Handle batch status update from status manager"""
+        # Table refresh is handled by status manager
+        pass
+
+    def _on_stats_updated(self, stats):
+        """Handle statistics update from status manager"""
+        # Stats display is handled by status manager
+        pass
 
     def _sync_file_operations_with_main_window(self):
         """Synchronize file operations manager with main window state."""
@@ -1530,44 +1568,12 @@ class CardManagementTab(QWidget):
 
     def manual_sync_status(self):
         """Manually sync card status based on whether cards have been generated"""
-        parent = get_main_window()
-
-        # Sync status based on whether cards have generated images
-        updated_count = 0
-        for card in self.cards:
-            old_status = getattr(card, "status", "pending")
-
-            if hasattr(card, "card_path") and card.card_path:
-                # Card has been generated (has a card image)
-                if old_status != "completed":
-                    card.status = "completed"
-                    updated_count += 1
-            else:
-                # No card image, should be pending
-                if old_status == "completed":
-                    card.status = "pending"
-                    updated_count += 1
-
-        # Log the sync
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message(
-                "INFO",
-                f"🔄 Synchronized {updated_count} card statuses based on generated images",
-            )
+        # Delegate to status manager
+        updated_count = self.status_manager.manual_sync_status()
 
         # Refresh the display
         self.table_manager.refresh_table()
         self.update_stats()
-        self.update_generation_stats()
-
-        # Log completion
-        if parent and hasattr(parent, "log_message"):
-            completed_count = sum(1 for c in self.cards if c.status == "completed")
-            pending_count = sum(1 for c in self.cards if c.status == "pending")
-            parent.log_message(
-                "SUCCESS",
-                f"✅ Status synchronized: {completed_count} completed, {pending_count} pending",
-            )
 
     def regenerate_all_cards_only(self):
         """Regenerate all cards while keeping existing images"""
@@ -2038,83 +2044,13 @@ class CardManagementTab(QWidget):
         """Synchronize card status based on existing rendered files"""
         # Sync file operations with main window first
         self._sync_file_operations_with_main_window()
-        # Use the file operations manager to sync card status
-        self.file_operations.sync_card_status_with_files(self.cards)
+        # Delegate to status manager
+        self.status_manager.sync_card_status_with_rendered_files()
 
     def update_generation_stats(self):
         """Update the generation progress indicator"""
-        # Check if UI is initialized
-        if not hasattr(self, "generation_stats_label"):
-            return
-
-        total = len(self.cards)
-        completed = sum(
-            1 for c in self.cards if hasattr(c, "status") and c.status == "completed"
-        )
-        pending = sum(
-            1 for c in self.cards if not hasattr(c, "status") or c.status == "pending"
-        )
-        failed = sum(
-            1 for c in self.cards if hasattr(c, "status") and c.status == "failed"
-        )
-        generating = sum(
-            1 for c in self.cards if hasattr(c, "status") and c.status == "generating"
-        )
-
-        # Calculate percentage
-        percentage = int(completed / total * 100) if total > 0 else 0
-
-        # Update main generation stats
-        if percentage == 100:
-            self.generation_stats_label.setText(f"✅ All {total} Cards Generated!")
-            self.generation_stats_label.setStyleSheet(
-                """
-                QLabel {
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 8px;
-                    background-color: #2d5a2d;
-                    border: 1px solid #4CAF50;
-                    border-radius: 4px;
-                    color: #4CAF50;
-                }
-            """
-            )
-        elif generating > 0:
-            self.generation_stats_label.setText(
-                f"🎨 Generating... {completed}/{total} Cards ({percentage}%)"
-            )
-            self.generation_stats_label.setStyleSheet(
-                """
-                QLabel {
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 8px;
-                    background-color: #3a4a3a;
-                    border: 1px solid #ff9800;
-                    border-radius: 4px;
-                    color: #ff9800;
-                }
-            """
-            )
-        else:
-            self.generation_stats_label.setText(
-                f"🎨 Generated: {completed}/{total} Cards ({percentage}%)"
-            )
-            if percentage < 100:
-                self.generation_stats_label.setStyleSheet(
-                    """
-                    QLabel {
-                        font-weight: bold;
-                        font-size: 14px;
-                        padding: 8px;
-                        background-color: #3a3a3a;
-                        border: 1px solid #555;
-                        border-radius: 4px;
-                        color: #4ec9b0;
-                    }
-                """
-                )
+        # Delegate to status manager
+        self.status_manager.update_generation_stats()
 
     def update_stats(self):
         """Update statistics label with detailed card type breakdown and color distribution"""
@@ -2385,59 +2321,38 @@ class CardManagementTab(QWidget):
 
     def on_generation_progress(self, card_id: int, status: str):
         """Handle generation progress updates"""
-        # Find the card being processed
-        current_card = None
-        current_index = 0
-        for i, card in enumerate(self.cards):
+        # Delegate to status manager
+        self.status_manager.on_generation_progress(card_id, status)
+
+        # Update status label if needed
+        for card in self.cards:
             if card.id == card_id:
-                current_card = card
-                current_index = i + 1
+                if hasattr(self, "generation_status_label"):
+                    self.generation_status_label.setText(f"Generating: {card.name}")
                 break
 
-        if current_card:
-            # Update progress bar
-            total = len(self.cards)
-            # Progress bar removed - was showing generation progress
-
-            # Update status label
-            if hasattr(self, "generation_status_label"):
-                self.generation_status_label.setText(f"Generating: {current_card.name}")
-
-            # Update the card status
-            current_card.status = "generating"
-            self.table_manager.refresh_table()
-            self.update_generation_stats()  # Update generation progress
-
-            parent = get_main_window()
-            if parent and hasattr(parent, "log_message"):
-                parent.log_message(
-                    "INFO",
-                    f"[{current_index}/{total}] Generating {current_card.name}: {status}",
-                )
+        # Refresh table
+        self.table_manager.refresh_table()
 
     def on_generation_completed(
         self, card_id: int, success: bool, message: str, image_path: str, card_path: str
     ):
         """Handle generation completion for a card"""
-        # Find the card
+        # Delegate to status manager
+        self.status_manager.on_generation_completed(
+            card_id, success, message, image_path, card_path
+        )
+
+        # Find the card for preview update
         updated_card = None
         for card in self.cards:
             if card.id == card_id:
-                if success:
-                    card.status = "completed"
-                    if image_path:
-                        card.image_path = image_path
-                    if card_path:
-                        card.card_path = card_path
-                    updated_card = card
-                else:
-                    card.status = "failed"
+                updated_card = card
                 break
 
         # Update display
         self.table_manager.refresh_table()
         self.update_button_visibility()  # Update button visibility after refresh
-        self.update_generation_stats()  # Update generation progress indicator
         # Re-apply filters after updating the table
         self.table_manager.apply_filter()
 
@@ -2455,22 +2370,18 @@ class CardManagementTab(QWidget):
                     parent.update_card_preview(updated_card)
 
         # Check if all cards are done
-        pending = sum(
-            1 for c in self.cards if getattr(c, "status", "pending") == "pending"
-        )
-        if pending == 0:
+        stats = self.status_manager.get_status_statistics()
+        if stats["pending"] == 0:
             if hasattr(self, "generation_status_label"):
                 self.generation_status_label.setText("All cards generated!")
         else:
             if hasattr(self, "generation_status_label"):
-                self.generation_status_label.setText(f"{pending} cards remaining")
-
-        parent = get_main_window()
-        if parent and hasattr(parent, "log_message"):
-            log_type = "INFO" if success else "ERROR"
-            parent.log_message(log_type, message)
+                self.generation_status_label.setText(
+                    f"{stats['pending']} cards remaining"
+                )
 
         # Auto-save deck after generation
+        parent = get_main_window()
         if success and parent and hasattr(parent, "auto_save_deck"):
             parent.auto_save_deck(self.cards)
 
