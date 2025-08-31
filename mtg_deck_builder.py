@@ -2678,9 +2678,19 @@ class MTGDeckBuilder(QMainWindow):
         self.cards_tab.regenerate_card.connect(self.on_regenerate_single_card)
 
         # Connect card selection signals for preview
+        # Use multiple signals to ensure preview updates work reliably with mouse and keyboard
         self.cards_tab.table.itemSelectionChanged.connect(
             self.on_card_selection_changed_in_table
         )
+        self.cards_tab.table.currentItemChanged.connect(
+            lambda current, previous: self.on_card_selection_changed_in_table()
+        )
+        # Also connect to selection model for more reliable updates
+        selection_model = self.cards_tab.table.selectionModel()
+        if selection_model:
+            selection_model.currentRowChanged.connect(
+                lambda current, previous: self.on_card_selection_changed_in_table()
+            )
         # Connect queue table selection if it exists
         if hasattr(self.cards_tab, "queue_table"):
             self.cards_tab.queue_table.itemSelectionChanged.connect(
@@ -3466,13 +3476,20 @@ class MTGDeckBuilder(QMainWindow):
     def on_card_selection_changed_in_table(self):
         """Handle card selection in Card Management table"""
         current_row = self.cards_tab.table.currentRow()
+
+        # Debug logging
+        self.log_message("DEBUG", f"Table selection changed to row: {current_row}")
+
         if (
             current_row >= 0
             and hasattr(self.cards_tab, "cards")
             and current_row < len(self.cards_tab.cards)
         ):
             card = self.cards_tab.cards[current_row]
+            self.log_message("DEBUG", f"Updating preview for card: {card.name}")
             self.update_card_preview(card)
+        else:
+            self.log_message("DEBUG", f"Invalid row or no cards: row={current_row}, has_cards={hasattr(self.cards_tab, 'cards')}")
 
     def on_card_selection_changed_in_generation(self):
         """Handle card selection in Generation Tab table"""
@@ -3582,14 +3599,17 @@ class MTGDeckBuilder(QMainWindow):
 
     def update_card_images(self, card: MTGCard):
         """Update the card image previews"""
-        # Get main window safely
-        main_window = get_main_window()
+        # Clear previous image first to ensure update is visible
+        self.card_image_label.clear()
+        self.card_image_label.setText("Loading...")
 
-        # Log what we're trying to load (only if main window found)
-        if main_window and hasattr(main_window, "log_message"):
-            main_window.log_message("DEBUG", f"Updating preview for card: {card.name}")
-            main_window.log_message("DEBUG", f"Card path: {card.card_path}")
-            main_window.log_message("DEBUG", f"Image path: {card.image_path}")
+        # Process events to show the loading state immediately
+        QApplication.processEvents()
+
+        # Log what we're trying to load
+        self.log_message("DEBUG", f"Updating image preview for card: {card.name}")
+        self.log_message("DEBUG", f"Card path: {card.card_path if card.card_path else 'None'}")
+        self.log_message("DEBUG", f"Image path: {card.image_path if hasattr(card, 'image_path') and card.image_path else 'None'}")
 
         # Full card image
         card_file = None
@@ -3601,10 +3621,9 @@ class MTGDeckBuilder(QMainWindow):
                 card_file = self._find_card_image(safe_name)
                 if card_file:
                     card.card_path = str(card_file)  # Update the card object
-                    if main_window and hasattr(main_window, "log_message"):
-                        main_window.log_message(
-                            "DEBUG", f"Found card in output directory: {card_file}"
-                        )
+                    self.log_message(
+                        "DEBUG", f"Found card in output directory: {card_file}"
+                    )
         else:
             # No card_path set, try to find it
             safe_name = make_safe_filename(card.name)
@@ -3617,10 +3636,9 @@ class MTGDeckBuilder(QMainWindow):
                     )
 
         if card_file and card_file.exists():
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "DEBUG", f"Loading card image from: {card_file}"
-                )
+            self.log_message(
+                "DEBUG", f"Loading card image from: {card_file}"
+            )
             pixmap = QPixmap(str(card_file))
             if not pixmap.isNull():
                 # Get the available space in the preview widget
@@ -3651,18 +3669,16 @@ class MTGDeckBuilder(QMainWindow):
                 )
             else:
                 self.card_image_label.setText("Card image failed to load")
-                if main_window and hasattr(main_window, "log_message"):
-                    main_window.log_message(
-                        "ERROR", "QPixmap failed to load card image"
-                    )
+                self.log_message(
+                    "ERROR", "QPixmap failed to load card image"
+                )
         else:
             self.card_image_label.setText(
                 f"Card image not available\n\n{card.name}\n{card.type}"
             )
-            if main_window and hasattr(main_window, "log_message"):
-                main_window.log_message(
-                    "WARNING", f"No card image found for {card.name}"
-                )
+            self.log_message(
+                "DEBUG", f"No card image found for {card.name}"
+            )
 
     def _find_card_image(self, safe_name: str) -> Path:
         """Find card image in output directories, handling timestamp patterns"""
