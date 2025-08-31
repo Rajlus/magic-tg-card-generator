@@ -3477,19 +3477,28 @@ class MTGDeckBuilder(QMainWindow):
         """Handle card selection in Card Management table"""
         current_row = self.cards_tab.table.currentRow()
 
-        # Debug logging
-        self.log_message("DEBUG", f"Table selection changed to row: {current_row}")
+        # Cards are stored in the CRUD manager, not directly in cards_tab
+        # Access them through the crud_manager
+        cards_list = None
+        if hasattr(self.cards_tab, "crud_manager") and hasattr(self.cards_tab.crud_manager, "cards"):
+            cards_list = self.cards_tab.crud_manager.cards
+        elif hasattr(self.cards_tab, "cards"):
+            # Fallback to direct cards attribute if it exists
+            cards_list = self.cards_tab.cards
 
-        if (
-            current_row >= 0
-            and hasattr(self.cards_tab, "cards")
-            and current_row < len(self.cards_tab.cards)
-        ):
-            card = self.cards_tab.cards[current_row]
+        if not cards_list:
+            self.log_message("DEBUG", f"No cards found in cards_tab or crud_manager")
+            return
+
+        total_cards = len(cards_list)
+        self.log_message("DEBUG", f"Table selection changed to row: {current_row} (total cards: {total_cards})")
+
+        if current_row >= 0 and current_row < total_cards:
+            card = cards_list[current_row]
             self.log_message("DEBUG", f"Updating preview for card: {card.name}")
             self.update_card_preview(card)
         else:
-            self.log_message("DEBUG", f"Invalid row or no cards: row={current_row}, has_cards={hasattr(self.cards_tab, 'cards')}")
+            self.log_message("DEBUG", f"Row {current_row} is out of range (0-{total_cards-1})")
 
     def on_card_selection_changed_in_generation(self):
         """Handle card selection in Generation Tab table"""
@@ -3499,8 +3508,16 @@ class MTGDeckBuilder(QMainWindow):
 
         if selected_rows:
             row = min(selected_rows)  # Get first selected row
-            if 0 <= row < len(self.cards_tab.cards):
-                card = self.cards_tab.cards[row]
+
+            # Get cards from CRUD manager or cards_tab
+            cards_list = None
+            if hasattr(self.cards_tab, "crud_manager") and hasattr(self.cards_tab.crud_manager, "cards"):
+                cards_list = self.cards_tab.crud_manager.cards
+            elif hasattr(self.cards_tab, "cards"):
+                cards_list = self.cards_tab.cards
+
+            if cards_list and 0 <= row < len(cards_list):
+                card = cards_list[row]
                 self.update_card_preview(card)
 
     def resizeEvent(self, event):
