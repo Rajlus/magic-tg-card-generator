@@ -52,6 +52,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.managers.card_file_operations import CardFileOperations
 from src.managers.card_table_manager import CardTableManager
 
 load_dotenv()
@@ -1402,6 +1403,101 @@ class CardManagementTab(QWidget):
         # Initialize table manager after UI is set up
         self._setup_table_manager()
 
+        # Initialize file operations manager
+        self.file_operations = CardFileOperations(self, logger=self._create_logger())
+
+    def _create_logger(self):
+        """Create a logger compatible with CardFileOperations."""
+
+        class CardManagementLogger:
+            def __init__(self, parent):
+                self.parent = parent
+
+            def log_message(self, level: str, message: str) -> None:
+                """Log a message using the main window's log system."""
+                main_window = get_main_window()
+                if main_window and hasattr(main_window, "log_message"):
+                    main_window.log_message(level, message)
+                else:
+                    # Fallback to console if main window not available
+                    print(f"[{level}] {message}")
+
+        return CardManagementLogger(self)
+
+    def _sync_file_operations_with_main_window(self):
+        """Synchronize file operations manager with main window state."""
+        parent = get_main_window()
+        if parent:
+            # Sync current deck name
+            if hasattr(parent, "current_deck_name"):
+                self.file_operations.current_deck_name = parent.current_deck_name
+            # Sync last loaded deck path
+            if hasattr(parent, "last_loaded_deck_path"):
+                self.file_operations.last_loaded_deck_path = (
+                    parent.last_loaded_deck_path
+                )
+
+    def _load_cards_from_file_operations(self, cards, skip_deck_tracking=False):
+        """
+        Helper method to load cards from CardFileOperations and update UI.
+
+        Args:
+            cards: List of MTGCard objects from CardFileOperations
+            skip_deck_tracking: If True, skip updating main window deck tracking
+        """
+        if not skip_deck_tracking:
+            # Update main window deck tracking from file operations
+            parent = get_main_window()
+            if parent:
+                parent.current_deck_name = self.file_operations.current_deck_name
+                parent.last_loaded_deck_path = (
+                    self.file_operations.last_loaded_deck_path
+                )
+
+                # Update deck name display
+                if hasattr(parent, "update_deck_display"):
+                    parent.update_deck_display()
+
+                # Update file watcher to watch this deck file
+                if (
+                    hasattr(parent, "file_watcher")
+                    and self.file_operations.last_loaded_deck_path
+                ):
+                    # Remove old file from watcher
+                    if hasattr(parent, "watching_file") and parent.watching_file:
+                        parent.file_watcher.removePath(parent.watching_file)
+
+                    # Add new file to watcher
+                    parent.file_watcher.addPath(
+                        self.file_operations.last_loaded_deck_path
+                    )
+                    parent.watching_file = self.file_operations.last_loaded_deck_path
+                    parent.log_message(
+                        "DEBUG",
+                        f"Now watching deck file for changes: {Path(self.file_operations.last_loaded_deck_path).name}",
+                    )
+
+        # Load the cards using existing method
+        self.load_cards(cards)
+
+        # Select and preview the commander (first card)
+        if len(cards) > 0:
+            # Select first row in table
+            self.table.selectRow(0)
+            # Update preview with commander
+            parent = get_main_window()
+            if parent and hasattr(parent, "update_card_preview"):
+                parent.update_card_preview(cards[0])
+                if parent and hasattr(parent, "log_message"):
+                    parent.log_message(
+                        "DEBUG", f"Auto-selected commander: {cards[0].name}"
+                    )
+        else:
+            # Clear the preview if no cards
+            parent = get_main_window()
+            if parent and hasattr(parent, "clear_card_preview"):
+                parent.clear_card_preview()
+
     def init_ui(self):
         layout = QVBoxLayout()
 
@@ -1927,74 +2023,75 @@ class CardManagementTab(QWidget):
 
     def load_deck(self):
         """Open file dialog to load a deck"""
-        self.load_deck_file()
+        cards = self.file_operations.load_deck_with_dialog()
+        if cards:
+            self._load_cards_from_file_operations(cards)
 
     def reload_current_deck(self):
         """Reload the currently loaded deck from file without dialog"""
-        parent = get_main_window()
-        if (
-            parent
-            and hasattr(parent, "last_loaded_deck_path")
-            and parent.last_loaded_deck_path
-        ):
-            deck_path = parent.last_loaded_deck_path
-            if Path(deck_path).exists():
-                # Log the reload action
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message(
-                        "INFO", f"🔄 Reloading deck: {Path(deck_path).name}"
-                    )
-
-                # Remember selected row
-                selected_row = -1
-                selected_items = self.table.selectedItems()
-                if selected_items:
-                    selected_row = selected_items[0].row()
-
-                # Disable auto-save temporarily to prevent overwriting
-                old_auto_save = self.auto_save_label.text()
-                self.auto_save_label.setText(" Auto-Save: Paused")
-                self.auto_save_label.setStyleSheet(
-                    "color: #ff9800; font-weight: bold; padding: 5px;"
-                )
-
-                # Load the deck file
-                self.load_deck_file(deck_path)
-
-                # Restore selection if we had one, otherwise select commander
-                if selected_row >= 0 and selected_row < self.table.rowCount():
-                    self.table.selectRow(selected_row)
-                elif self.table.rowCount() > 0:
-                    # Select commander if no previous selection
-                    self.table.selectRow(0)
-                    selected_row = 0
-
-                # Re-enable auto-save after a short delay
-                from PyQt6.QtCore import QTimer
-
-                QTimer.singleShot(1000, lambda: self._restore_auto_save(old_auto_save))
-
-                # Update preview with the selected card (or commander)
-                if 0 <= selected_row < len(self.cards):
-                    # Force preview update
-                    if parent and hasattr(parent, "update_card_preview"):
-                        parent.update_card_preview(self.cards[selected_row])
-                        parent.log_message(
-                            "DEBUG",
-                            f"Updated preview for card: {self.cards[selected_row].name}",
-                        )
-
-                # Show success message
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message("SUCCESS", "✅ Deck reloaded successfully!")
-            else:
-                QMessageBox.warning(
-                    self, "File Not Found", f"Deck file not found: {deck_path}"
-                )
-        else:
+        # Check if we have a current deck to reload
+        if not self.file_operations.last_loaded_deck_path:
             QMessageBox.information(
                 self, "No Deck Loaded", "Please load a deck first before reloading."
             )
+            return
+
+        deck_path = self.file_operations.last_loaded_deck_path
+        if not Path(deck_path).exists():
+            QMessageBox.warning(
+                self, "File Not Found", f"Deck file not found: {deck_path}"
+            )
+            return
+
+        # Log the reload action
+        parent = get_main_window()
+        if parent and hasattr(parent, "log_message"):
+            parent.log_message("INFO", f"🔄 Reloading deck: {Path(deck_path).name}")
+
+        # Remember selected row
+        selected_row = -1
+        selected_items = self.table.selectedItems()
+        if selected_items:
+            selected_row = selected_items[0].row()
+
+        # Disable auto-save temporarily to prevent overwriting
+        old_auto_save = self.auto_save_label.text()
+        self.auto_save_label.setText(" Auto-Save: Paused")
+        self.auto_save_label.setStyleSheet(
+            "color: #ff9800; font-weight: bold; padding: 5px;"
+        )
+
+        # Load the deck file using file operations
+        cards = self.file_operations.reload_current_deck()
+        if cards:
+            self._load_cards_from_file_operations(cards, skip_deck_tracking=True)
+
+            # Restore selection if we had one, otherwise select commander
+            if selected_row >= 0 and selected_row < self.table.rowCount():
+                self.table.selectRow(selected_row)
+            elif self.table.rowCount() > 0:
+                # Select commander if no previous selection
+                self.table.selectRow(0)
+                selected_row = 0
+
+            # Update preview with the selected card (or commander)
+            if 0 <= selected_row < len(self.cards):
+                # Force preview update
+                if parent and hasattr(parent, "update_card_preview"):
+                    parent.update_card_preview(self.cards[selected_row])
+                    parent.log_message(
+                        "DEBUG",
+                        f"Updated preview for card: {self.cards[selected_row].name}",
+                    )
+
+            # Show success message
+            if parent and hasattr(parent, "log_message"):
+                parent.log_message("SUCCESS", "✅ Deck reloaded successfully!")
+
+        # Re-enable auto-save after a short delay
+        from PyQt6.QtCore import QTimer
+
+        QTimer.singleShot(1000, lambda: self._restore_auto_save(old_auto_save))
 
     def _restore_auto_save(self, old_text):
         """Restore auto-save indicator after reload"""
@@ -2006,141 +2103,42 @@ class CardManagementTab(QWidget):
     def load_deck_file(self, filename=None):
         """Load a deck from a YAML file"""
         if filename is None:
-            filename, _ = QFileDialog.getOpenFileName(
-                self, "Load Deck", "saved_decks/", "YAML Files (*.yaml);;All Files (*)"
-            )
-
-        if filename:
-            try:
-                import yaml
-
-                with open(filename) as f:
-                    deck_data = yaml.safe_load(f)
-
-                # Convert to MTGCard objects
-                cards = []
-
-                # Handle both old format (with separate commander) and new format (all in cards)
-                if "commander" in deck_data:
-                    # Old format with separate commander
-                    cmd_data = deck_data["commander"]
-                    commander = MTGCard(
-                        id=cmd_data.get("id", 1),
-                        name=cmd_data.get("name", "Unknown Commander"),
-                        type=cmd_data.get("type", "Legendary Creature"),
-                    )
-                    # Set other attributes but skip status initially
-                    for key, value in cmd_data.items():
-                        if key not in ["id", "name", "type", "status"]:
-                            setattr(commander, key, value)
-                    cards.append(commander)
-
-                # Add other cards
-                if "cards" in deck_data:
-                    for i, card_data in enumerate(deck_data["cards"], start=2):
-                        card = MTGCard(
-                            id=card_data.get("id", i),
-                            name=card_data.get("name", f"Card {i}"),
-                            type=card_data.get("type", "Unknown"),
-                        )
-                        # Set other attributes but skip status initially
-                        # Status will be determined by sync_card_status_with_rendered_files
-                        for key, value in card_data.items():
-                            if key not in ["id", "name", "type", "status"]:
-                                setattr(card, key, value)
-                        # Don't set status from YAML, let it be determined by actual files
-                        # This prevents status from one deck affecting another
-                        cards.append(card)
-
-                # Update deck name BEFORE loading cards (for status sync)
-                parent = get_main_window()
-                if parent:
-                    from pathlib import Path
-
-                    try:
-                        deck_name = Path(filename).stem
-                        parent.current_deck_name = deck_name
-                        parent.last_loaded_deck_path = filename
-
-                        # Update deck name display
-                        if hasattr(parent, "update_deck_display"):
-                            parent.update_deck_display()
-
-                        # Update file watcher to watch this deck file
-                        if hasattr(parent, "file_watcher"):
-                            # Remove old file from watcher
-                            if (
-                                hasattr(parent, "watching_file")
-                                and parent.watching_file
-                            ):
-                                parent.file_watcher.removePath(parent.watching_file)
-
-                            # Add new file to watcher
-                            parent.file_watcher.addPath(filename)
-                            parent.watching_file = filename
-                            parent.log_message(
-                                "DEBUG",
-                                f"Now watching deck file for changes: {Path(filename).name}",
-                            )
-                    except ValueError as ve:
-                        # Handle Path errors separately
-                        print(f"Path error: {ve}")
-
-                # NOW load the cards after deck name is set
-                self.load_cards(cards)
-
-                # Select and preview the commander (first card)
-                if len(cards) > 0:
-                    # Select first row in table
-                    self.table.selectRow(0)
-                    # Update preview with commander
-                    if parent and hasattr(parent, "update_card_preview"):
-                        parent.update_card_preview(cards[0])
-                        if parent and hasattr(parent, "log_message"):
-                            parent.log_message(
-                                "DEBUG", f"Auto-selected commander: {cards[0].name}"
-                            )
-                else:
-                    # Clear the preview if no cards
-                    if parent and hasattr(parent, "clear_card_preview"):
-                        parent.clear_card_preview()
-
-                # Log success message
-                if (
-                    parent
-                    and hasattr(parent, "log_message")
-                    and hasattr(parent, "current_deck_name")
-                ):
-                    parent.log_message(
-                        "INFO",
-                        f"Loaded deck: {parent.current_deck_name} ({len(cards)} cards)",
-                    )
-            except yaml.YAMLError as ye:
-                QMessageBox.critical(
-                    self, "Load Failed", f"YAML parsing error: {str(ye)}"
-                )
-            except Exception as e:
-                import traceback
-
-                print(f"Load error: {traceback.format_exc()}")
-                QMessageBox.critical(
-                    self, "Load Failed", f"Failed to load deck: {str(e)}"
-                )
+            # Use file operations for dialog
+            cards = self.file_operations.load_deck_with_dialog()
+            if cards:
+                self._load_cards_from_file_operations(cards)
+        else:
+            # Load specific file using file operations
+            cards = self.file_operations.load_deck_from_file(filename)
+            if cards:
+                self._load_cards_from_file_operations(cards)
 
     def manual_sync_status(self):
-        """Manually reset and sync card status with rendered files"""
+        """Manually sync card status based on whether cards have been generated"""
         parent = get_main_window()
 
-        # Reset ALL cards to pending first
+        # Sync status based on whether cards have generated images
+        updated_count = 0
         for card in self.cards:
-            card.status = "pending"
+            old_status = getattr(card, "status", "pending")
 
-        # Log the reset
+            if hasattr(card, "card_path") and card.card_path:
+                # Card has been generated (has a card image)
+                if old_status != "completed":
+                    card.status = "completed"
+                    updated_count += 1
+            else:
+                # No card image, should be pending
+                if old_status == "completed":
+                    card.status = "pending"
+                    updated_count += 1
+
+        # Log the sync
         if parent and hasattr(parent, "log_message"):
-            parent.log_message("INFO", "🔄 Resetting all card status to pending...")
-
-        # Now sync with actual rendered files
-        self.sync_card_status_with_rendered_files()
+            parent.log_message(
+                "INFO",
+                f"🔄 Synchronized {updated_count} card statuses based on generated images",
+            )
 
         # Refresh the display
         self.table_manager.refresh_table()
@@ -2321,151 +2319,13 @@ class CardManagementTab(QWidget):
 
     def import_csv(self):
         """Import deck from CSV file"""
-        csv_file, _ = QFileDialog.getOpenFileName(
-            self, "Import CSV Deck", "", "CSV Files (*.csv);;All Files (*)"
-        )
-
-        if csv_file:
-            try:
-                import csv
-                from pathlib import Path
-
-                cards = []
-                with open(csv_file, encoding="utf-8") as f:
-                    reader = csv.DictReader(f, delimiter=";")
-                    for i, row in enumerate(reader, start=1):
-                        card = MTGCard(
-                            id=int(row.get("ID", i)),
-                            name=row.get("Name", f"Card {i}"),
-                            type=row.get("Type", "Unknown"),
-                        )
-                        # Set other attributes
-                        card.cost = row.get("Cost", "")
-                        card.text = row.get("Text", "")
-                        card.power = (
-                            int(row["Power"])
-                            if row.get("Power") and row["Power"].isdigit()
-                            else None
-                        )
-                        card.toughness = (
-                            int(row["Toughness"])
-                            if row.get("Toughness") and row["Toughness"].isdigit()
-                            else None
-                        )
-                        card.flavor = row.get("Flavor", "")
-                        card.rarity = row.get("Rarity", "common")
-                        card.art = row.get("Art", "")
-                        card.status = row.get("Status", "pending")
-                        cards.append(card)
-
-                if cards:
-                    self.load_cards(cards)
-                    parent = get_main_window()
-                    if parent and hasattr(parent, "log_message"):
-                        parent.log_message(
-                            "SUCCESS", f"✅ Imported {len(cards)} cards from CSV"
-                        )
-                    QMessageBox.information(
-                        self,
-                        "Import Success",
-                        f"Successfully imported {len(cards)} cards from CSV",
-                    )
-                else:
-                    QMessageBox.warning(self, "No Cards", "No cards found in CSV file")
-
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Import Failed", f"Failed to import CSV:\n{str(e)}"
-                )
-                parent = get_main_window()
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message("ERROR", f"❌ CSV import failed: {str(e)}")
+        cards = self.file_operations.import_csv_with_dialog()
+        if cards:
+            self.load_cards(cards)
 
     def export_csv(self):
         """Export current deck to CSV file"""
-        if not self.cards:
-            QMessageBox.warning(self, "No Deck", "Please load a deck first!")
-            return
-
-        from pathlib import Path
-
-        # Get deck name and create default path in deck folder
-        parent = get_main_window()
-        default_path = "deck_export.csv"
-        if parent and hasattr(parent, "current_deck_name"):
-            # Use the deck's own folder in saved_decks
-            deck_folder = Path("saved_decks") / parent.current_deck_name
-            deck_folder.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
-            default_path = str(deck_folder / f"{parent.current_deck_name}.csv")
-
-        # Ask user for CSV save location (with deck folder as default)
-        csv_file, _ = QFileDialog.getSaveFileName(
-            self, "Export Deck to CSV", default_path, "CSV Files (*.csv);;All Files (*)"
-        )
-
-        if csv_file:
-            try:
-                import csv
-
-                # Write CSV with semicolon delimiter for better Excel compatibility
-                with open(csv_file, "w", newline="", encoding="utf-8") as f:
-                    fieldnames = [
-                        "ID",
-                        "Name",
-                        "Type",
-                        "Cost",
-                        "Power",
-                        "Toughness",
-                        "Text",
-                        "Flavor",
-                        "Rarity",
-                        "Art",
-                        "Status",
-                    ]
-                    writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-
-                    # Write header
-                    writer.writeheader()
-
-                    # Write cards
-                    for card in self.cards:
-                        writer.writerow(
-                            {
-                                "ID": card.id,
-                                "Name": card.name,
-                                "Type": card.type,
-                                "Cost": card.cost if card.cost else "",
-                                "Power": card.power if card.power else "",
-                                "Toughness": card.toughness if card.toughness else "",
-                                "Text": card.text if card.text else "",
-                                "Flavor": card.flavor if card.flavor else "",
-                                "Rarity": card.rarity if card.rarity else "",
-                                "Art": card.art if card.art else "",
-                                "Status": card.status
-                                if hasattr(card, "status")
-                                else "pending",
-                            }
-                        )
-
-                # Log success
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message(
-                        "SUCCESS",
-                        f"✅ Exported {len(self.cards)} cards to CSV: {Path(csv_file).name}",
-                    )
-
-                QMessageBox.information(
-                    self,
-                    "Export Success",
-                    f"Successfully exported {len(self.cards)} cards to:\n{Path(csv_file).name}",
-                )
-
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Export Failed", f"Failed to export CSV:\n{str(e)}"
-                )
-                if parent and hasattr(parent, "log_message"):
-                    parent.log_message("ERROR", f"❌ CSV export failed: {str(e)}")
+        self.file_operations.export_csv_with_dialog(self.cards)
 
     # Removed old export_deck method - now using XML export only
 
@@ -3058,14 +2918,21 @@ class CardManagementTab(QWidget):
         self.cards = cards
         self.commander_colors = self.get_commander_colors()
 
-        # ALWAYS reset ALL card status to pending first
-        # This ensures clean state when switching decks
+        # Synchronize card status based on whether they have generated images
+        # Status should match whether the card has been generated
         for card in self.cards:
-            card.status = "pending"
-
-        # Now synchronize card status with existing rendered cards
-        # This will only update to 'completed' if files actually exist for THIS deck
-        self.sync_card_status_with_rendered_files()
+            if hasattr(card, "card_path") and card.card_path:
+                # Card has been generated (has a card image)
+                card.status = "completed"
+            else:
+                # No card image means it should be pending
+                # (unless it's currently generating or failed)
+                if hasattr(card, "status") and card.status in ["generating", "failed"]:
+                    # Keep generating or failed status
+                    pass
+                else:
+                    # Default to pending
+                    card.status = "pending"
 
         # Log all cards with color violations
         self.log_color_violations()
@@ -3078,43 +2945,10 @@ class CardManagementTab(QWidget):
 
     def sync_card_status_with_rendered_files(self):
         """Synchronize card status based on existing rendered files"""
-        parent = get_main_window()
-        if not parent or not hasattr(parent, "current_deck_name"):
-            return
-
-        deck_name = parent.current_deck_name
-        if not deck_name:
-            return
-
-        # Check for rendered cards directory
-        from pathlib import Path
-
-        rendered_dir = Path("saved_decks") / deck_name / "rendered_cards"
-
-        if not rendered_dir.exists():
-            return
-
-        # Get list of rendered cards
-        rendered_files = set()
-        for file_path in rendered_dir.glob("*.png"):
-            rendered_files.add(file_path.stem)  # Get filename without extension
-
-        # Update card status based on rendered files
-        updated_count = 0
-        for card in self.cards:
-            safe_name = make_safe_filename(card.name)
-            if safe_name in rendered_files:
-                if not hasattr(card, "status") or card.status != "completed":
-                    card.status = "completed"
-                    updated_count += 1
-            elif not hasattr(card, "status"):
-                card.status = "pending"
-
-        if updated_count > 0 and parent and hasattr(parent, "log_message"):
-            parent.log_message(
-                "INFO",
-                f"📊 Synchronized status for {updated_count} cards based on existing rendered files",
-            )
+        # Sync file operations with main window first
+        self._sync_file_operations_with_main_window()
+        # Use the file operations manager to sync card status
+        self.file_operations.sync_card_status_with_files(self.cards)
 
     def log_color_violations(self):
         """Log all cards that violate commander color identity"""
