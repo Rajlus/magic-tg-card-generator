@@ -96,6 +96,7 @@ ignore = [
     "F841",  # local variable assigned but never used
     "SIM102", # use single if instead of nested
     "SIM108", # use ternary operator
+    "SIM114", # combine if branches with logical or (can harm readability)
 ]
 
 [tool.ruff.isort]

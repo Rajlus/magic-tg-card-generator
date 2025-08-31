@@ -4,6 +4,7 @@ MTG Commander Deck Builder GUI
 Complete tool for generating 100-card Commander decks with AI assistance
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -11,7 +12,7 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import requests
 import yaml
@@ -1483,10 +1484,8 @@ class CardManagementTab(QWidget):
         # Update the card based on which column was edited
         # Columns: ID, Name, Cost, Type, Text, P/T, Rarity, Art, Status
         if column == 0:  # ID
-            try:
+            with contextlib.suppress(ValueError):
                 card.id = int(new_value)
-            except ValueError:
-                pass
         elif column == 1:  # Name
             card.name = new_value
         elif column == 2:  # Cost
@@ -1662,10 +1661,8 @@ class CardManagementTab(QWidget):
     def refresh_table(self):
         """Refresh table display with color validation"""
         # Temporarily disconnect itemChanged signal to avoid triggering saves during refresh
-        try:
+        with contextlib.suppress(Exception):
             self.table.itemChanged.disconnect()
-        except:
-            pass
 
         self.table.setRowCount(len(self.cards))
 
@@ -1877,17 +1874,20 @@ class CardManagementTab(QWidget):
             # Type filter
             if filter_text != "All":
                 card_type = self.table.item(row, 3).text()
-                if filter_text == "Creatures" and "Creature" not in card_type:
-                    show = False
-                elif filter_text == "Lands" and "Land" not in card_type:
-                    show = False
-                elif filter_text == "Instants" and "Instant" not in card_type:
-                    show = False
-                elif filter_text == "Sorceries" and "Sorcery" not in card_type:
-                    show = False
-                elif filter_text == "Artifacts" and "Artifact" not in card_type:
-                    show = False
-                elif filter_text == "Enchantments" and "Enchantment" not in card_type:
+                if (
+                    filter_text == "Creatures"
+                    and "Creature" not in card_type
+                    or filter_text == "Lands"
+                    and "Land" not in card_type
+                    or filter_text == "Instants"
+                    and "Instant" not in card_type
+                    or filter_text == "Sorceries"
+                    and "Sorcery" not in card_type
+                    or filter_text == "Artifacts"
+                    and "Artifact" not in card_type
+                    or filter_text == "Enchantments"
+                    and "Enchantment" not in card_type
+                ):
                     show = False
 
             # Search filter
@@ -1904,7 +1904,7 @@ class CardManagementTab(QWidget):
         max_id = 0
         for card in self.cards:
             try:
-                card_id = int(card.id) if isinstance(card.id, (str, int)) else 0
+                card_id = int(card.id) if isinstance(card.id, str | int) else 0
                 max_id = max(max_id, card_id)
             except (ValueError, TypeError):
                 continue
@@ -1997,7 +1997,7 @@ class CardManagementTab(QWidget):
         max_id = 0
         for card in self.cards:
             try:
-                card_id = int(card.id) if isinstance(card.id, (str, int)) else 0
+                card_id = int(card.id) if isinstance(card.id, str | int) else 0
                 max_id = max(max_id, card_id)
             except (ValueError, TypeError):
                 continue
@@ -3542,11 +3542,14 @@ class GenerationTab(QWidget):
                 status_item = self.queue_table.item(row, 3)
                 if status_item:
                     status = status_item.text()
-                    if status == "pending" and not show_pending:
-                        show = False
-                    elif status == "completed" and not show_completed:
-                        show = False
-                    elif status == "failed" and not show_failed:
+                    if (
+                        status == "pending"
+                        and not show_pending
+                        or status == "completed"
+                        and not show_completed
+                        or status == "failed"
+                        and not show_failed
+                    ):
                         show = False
 
             # Search filter
@@ -3652,32 +3655,24 @@ class GenerationTab(QWidget):
 
             # Same deletion logic but silent
             if card.card_path and Path(card.card_path).exists():
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(card.card_path)
-                except:
-                    pass
                 card.card_path = None
 
             if card.image_path and Path(card.image_path).exists():
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(card.image_path)
-                except:
-                    pass
                 card.image_path = None
 
             safe_name = make_safe_filename(card.name)
             for pattern in [f"{safe_name}_*.png", f"{safe_name}_*.json"]:
                 for file in Path("output/cards").glob(pattern):
-                    try:
+                    with contextlib.suppress(Exception):
                         os.remove(file)
-                    except:
-                        pass
 
             for file in Path("output/images").glob(f"{safe_name}*.jpg"):
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(file)
-                except:
-                    pass
 
             card.status = "pending"
             card.generated_at = None
@@ -3757,7 +3752,7 @@ class GenerationTab(QWidget):
             cards_needing_art = 0
 
             # Reset status for pending cards and check art descriptions
-            for i, card in enumerate(self.cards):
+            for _i, card in enumerate(self.cards):
                 if card.status != "completed":
                     card.status = "pending"
 

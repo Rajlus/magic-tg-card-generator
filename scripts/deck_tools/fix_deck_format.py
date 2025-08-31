@@ -75,10 +75,8 @@ class DeckFixer:
     def fix_special_characters(self, card):
         """Fix smart quotes and other special characters"""
         replacements = {
-            '"': '"',  # Left smart quote
-            '"': '"',  # Right smart quote
-            """: "'",  # Left smart apostrophe
-            """: "'",  # Right smart apostrophe
+            '"': '"',  # Smart quotes (both left and right)
+            "'": "'",  # Smart apostrophes (both left and right)
             "–": "-",  # En-dash
             "—": "-",  # Em-dash (backup)
         }
@@ -160,9 +158,9 @@ class DeckFixer:
             if re.match(r"^(Wenn|Immer wenn|Zu Beginn|Am Ende|Solange)\s+", sentence):
                 result.append(sentence)
             # Activated abilities
-            elif re.match(r"^{[^}]+}(?:,\s*{[^}]+})*(?:,\s*{T})?:\s*", sentence):
-                result.append(sentence)
-            elif re.match(r"^{T}(?:,\s*{[^}]+})*:\s*", sentence):
+            elif re.match(
+                r"^{[^}]+}(?:,\s*{[^}]+})*(?:,\s*{T})?:\s*", sentence
+            ) or re.match(r"^{T}(?:,\s*{[^}]+})*:\s*", sentence):
                 result.append(sentence)
             # Sacrifice abilities
             elif re.match(r"^Opfere\s+[^:]+:\s*", sentence):

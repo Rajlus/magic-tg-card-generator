@@ -9,7 +9,7 @@ import sys
 import xml.dom.minidom as minidom
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 

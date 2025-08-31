@@ -143,10 +143,8 @@ class DeckValidator:
         # Check for smart quotes and other problematic characters
         # Note: Regular quotes (") in ability text are OK for formatting abilities
         problematic_chars = {
-            '"': '"',  # Left smart quote
-            '"': '"',  # Right smart quote
-            """: "'",  # Left smart apostrophe
-            """: "'",  # Right smart apostrophe
+            '"': '"',  # Smart quotes (both left and right)
+            "'": "'",  # Smart apostrophes (both left and right)
             "–": "-",  # En-dash
             "—": "-",  # Em-dash
             "„": '"',  # German low quote

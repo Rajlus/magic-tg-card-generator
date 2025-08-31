@@ -4,6 +4,7 @@ MTG Commander Deck Builder GUI
 Complete tool for generating 100-card Commander decks with AI assistance
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -11,7 +12,7 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 import requests
 import yaml
@@ -1789,10 +1790,8 @@ class CardManagementTab(QWidget):
         # Update the card based on which column was edited
         # Columns: ID, Name, Cost, Type, Text, P/T, Rarity, Art, Status
         if column == 0:  # ID
-            try:
+            with contextlib.suppress(ValueError):
                 card.id = int(new_value)
-            except ValueError:
-                pass
         elif column == 1:  # Name
             card.name = new_value
         elif column == 2:  # Cost
@@ -3162,10 +3161,8 @@ class CardManagementTab(QWidget):
     def refresh_table(self):
         """Refresh table display with color validation"""
         # Temporarily disconnect itemChanged signal to avoid triggering saves during refresh
-        try:
+        with contextlib.suppress(Exception):
             self.table.itemChanged.disconnect()
-        except:
-            pass
 
         self.table.setRowCount(len(self.cards))
 
@@ -3277,19 +3274,15 @@ class CardManagementTab(QWidget):
             self.table.setItem(row, 8, status_item)
 
             # Image Status column (9)
-            has_image = False
-            if (
+            has_image = (
                 hasattr(card, "card_path")
                 and card.card_path
                 and Path(card.card_path).exists()
-            ):
-                has_image = True
-            elif (
+            ) or (
                 hasattr(card, "image_path")
                 and card.image_path
                 and Path(card.image_path).exists()
-            ):
-                has_image = True
+            )
 
             image_text = "🖼️ Yes" if has_image else "❌ No"
             image_item = QTableWidgetItem(image_text)
@@ -3500,33 +3493,33 @@ class CardManagementTab(QWidget):
             # Type filter - check both English and German terms
             if filter_text != "All":
                 card_type = self.table.item(row, 3).text().lower()
-                if (
+                if (  # noqa: SIM114
                     filter_text == "Creatures"
                     and "kreatur" not in card_type
                     and "creature" not in card_type
                 ):
                     show = False
-                elif filter_text == "Lands" and "land" not in card_type:
+                elif filter_text == "Lands" and "land" not in card_type:  # noqa: SIM114
                     show = False
-                elif (
+                elif (  # noqa: SIM114
                     filter_text == "Instants"
                     and "spontanzauber" not in card_type
                     and "instant" not in card_type
                 ):
                     show = False
-                elif (
+                elif (  # noqa: SIM114
                     filter_text == "Sorceries"
                     and "hexerei" not in card_type
                     and "sorcery" not in card_type
                 ):
                     show = False
-                elif (
+                elif (  # noqa: SIM114
                     filter_text == "Artifacts"
                     and "artefakt" not in card_type
                     and "artifact" not in card_type
                 ):
                     show = False
-                elif (
+                elif (  # noqa: SIM114
                     filter_text == "Enchantments"
                     and "verzauberung" not in card_type
                     and "enchantment" not in card_type
@@ -3538,13 +3531,19 @@ class CardManagementTab(QWidget):
                 status_item = self.table.item(row, 8)  # Gen. Status column
                 if status_item:
                     status_text = status_item.text().lower()
-                    if status_filter == "✅ Completed" and "done" not in status_text:
-                        show = False
-                    elif status_filter == "⏸️ Pending" and "pending" not in status_text:
-                        show = False
-                    elif status_filter == "❌ Failed" and "failed" not in status_text:
+                    if (
+                        status_filter == "✅ Completed" and "done" not in status_text
+                    ):  # noqa: SIM114
                         show = False
                     elif (
+                        status_filter == "⏸️ Pending" and "pending" not in status_text
+                    ):  # noqa: SIM114
+                        show = False
+                    elif (
+                        status_filter == "❌ Failed" and "failed" not in status_text
+                    ):  # noqa: SIM114
+                        show = False
+                    elif (  # noqa: SIM114
                         status_filter == "🔄 Generating"
                         and "generating" not in status_text
                     ):
@@ -3586,7 +3585,7 @@ class CardManagementTab(QWidget):
         max_id = 0
         for card in self.cards:
             try:
-                card_id = int(card.id) if isinstance(card.id, (str, int)) else 0
+                card_id = int(card.id) if isinstance(card.id, str | int) else 0
                 max_id = max(max_id, card_id)
             except (ValueError, TypeError):
                 continue
@@ -3676,7 +3675,7 @@ class CardManagementTab(QWidget):
         max_id = 0
         for card in self.cards:
             try:
-                card_id = int(card.id) if isinstance(card.id, (str, int)) else 0
+                card_id = int(card.id) if isinstance(card.id, str | int) else 0
                 max_id = max(max_id, card_id)
             except (ValueError, TypeError):
                 continue
@@ -4323,7 +4322,7 @@ class CardManagementTab(QWidget):
         pending = 0
         failed = 0
 
-        for row, card in enumerate(self.cards):
+        for _row, card in enumerate(self.cards):
             # ID
 
             # Name
@@ -6101,7 +6100,7 @@ class MTGDeckBuilder(QMainWindow):
         # Enable double-click to rename
         self.deck_name_display.setToolTip("Double-click to rename deck")
         self.deck_name_display.mouseDoubleClickEvent = (
-            lambda event: self.rename_deck_dialog()
+            lambda _event: self.rename_deck_dialog()
         )
         layout.addWidget(self.deck_name_display)
 
