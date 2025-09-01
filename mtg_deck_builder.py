@@ -1800,10 +1800,17 @@ class CardManagementTab(QWidget):
 
             # Update preview if current card was affected
             current_row = self.table.currentRow()
-            if current_row in selected_rows and 0 <= current_row < len(self.cards):
+            if current_row in selected_rows and 0 <= current_row < len(cards_list):
                 parent = get_main_window()
                 if parent and hasattr(parent, "update_card_preview"):
-                    parent.update_card_preview(self.cards[current_row])
+                    parent.update_card_preview(cards_list[current_row])
+                    parent.log_message(
+                        "DEBUG",
+                        f"Updated preview after deleting files for {cards_list[current_row].name}",
+                    )
+
+            # Update button visibility after deletion
+            self.update_button_visibility()
 
             parent = get_main_window()
             if parent and hasattr(parent, "log_message"):
@@ -2098,10 +2105,17 @@ class CardManagementTab(QWidget):
 
             # Update preview if current card was affected
             current_row = self.table.currentRow()
-            if current_row in selected_rows and 0 <= current_row < len(self.cards):
+            if current_row in selected_rows and 0 <= current_row < len(cards_list):
                 parent = get_main_window()
                 if parent and hasattr(parent, "update_card_preview"):
-                    parent.update_card_preview(self.cards[current_row])
+                    parent.update_card_preview(cards_list[current_row])
+                    parent.log_message(
+                        "DEBUG",
+                        f"Updated preview after deleting files for {cards_list[current_row].name}",
+                    )
+
+            # Update button visibility after deletion
+            self.update_button_visibility()
 
             parent = get_main_window()
             if parent and hasattr(parent, "log_message"):
