@@ -1844,17 +1844,31 @@ class CardManagementTab(QWidget):
         total = len(cards_list)
         lands = sum(1 for c in cards_list if c.is_land())
         creatures = sum(1 for c in cards_list if c.is_creature())
+
+        # Support both English and German card types
         instants = sum(
-            1 for c in cards_list if "Instant" in c.type and "Creature" not in c.type
+            1
+            for c in cards_list
+            if ("Instant" in c.type or "Spontanzauber" in c.type)
+            and "Creature" not in c.type
+            and "Kreatur" not in c.type
         )
-        sorceries = sum(1 for c in cards_list if "Sorcery" in c.type)
+        sorceries = sum(
+            1 for c in cards_list if "Sorcery" in c.type or "Hexerei" in c.type
+        )
         artifacts = sum(
-            1 for c in cards_list if "Artifact" in c.type and "Creature" not in c.type
+            1
+            for c in cards_list
+            if ("Artifact" in c.type or "Artefakt" in c.type)
+            and "Creature" not in c.type
+            and "Kreatur" not in c.type
         )
         enchantments = sum(
             1
             for c in cards_list
-            if "Enchantment" in c.type and "Creature" not in c.type
+            if ("Enchantment" in c.type or "Verzauberung" in c.type)
+            and "Creature" not in c.type
+            and "Kreatur" not in c.type
         )
 
         # Calculate color distribution for all cards
