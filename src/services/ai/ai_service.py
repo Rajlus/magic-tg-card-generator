@@ -51,6 +51,7 @@ class AIService:
         self.is_initialized = False
 
         logger.info(f"AIService initialized with {max_workers} max workers")
+        logger.debug(f"Output directory: {self.output_dir}")
 
     async def initialize(self) -> bool:
         """
