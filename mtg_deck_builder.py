@@ -1258,6 +1258,7 @@ class CardManagementTab(QWidget):
         # Refresh the display
         self.table_manager.refresh_table()
         self.update_stats()
+        self.update_button_visibility()  # Update button visibility after loading deck
 
     def regenerate_all_cards_only(self):
         """Regenerate all cards while keeping existing images"""
@@ -1384,16 +1385,63 @@ class CardManagementTab(QWidget):
 
     def update_button_visibility(self):
         """Update visibility of buttons based on selection"""
-        selected_rows = self.table_manager.get_selected_rows()
+        # Get selected rows from the table in generation tab
+        selected_rows = []
+        if hasattr(self, "table"):
+            # Get current row (single selection)
+            current_row = self.table.currentRow()
+            if current_row >= 0:
+                selected_rows = [current_row]
+
+        # If no current row, try selected items (for multi-selection)
+        if not selected_rows and hasattr(self, "table"):
+            selected_rows = set()
+            for item in self.table.selectedItems():
+                selected_rows.add(item.row())
+            selected_rows = list(selected_rows)
+
+        # Get the actual cards list from crud_manager or fallback to self.cards
+        cards_list = []
+        if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+            cards_list = self.crud_manager.cards
+        elif self.cards:
+            cards_list = self.cards
+
+        # Debug logging
+        parent = get_main_window()
+        if parent and hasattr(parent, "log_message"):
+            parent.log_message(
+                "DEBUG", f"update_button_visibility: selected_rows = {selected_rows}"
+            )
+            parent.log_message("DEBUG", f"  - cards_list length: {len(cards_list)}")
+            parent.log_message(
+                "DEBUG",
+                f"  - cards source: {'crud_manager' if hasattr(self, 'crud_manager') else 'self.cards'}",
+            )
 
         # Check status of selected cards
         has_generated = False
         has_pending = False
 
-        if selected_rows:
+        if selected_rows and cards_list:
             for row in selected_rows:
-                if 0 <= row < len(self.cards):
-                    card = self.cards[row]
+                if 0 <= row < len(cards_list):
+                    card = cards_list[row]
+                    # Debug logging for each card
+                    if parent and hasattr(parent, "log_message"):
+                        card_path = getattr(card, "card_path", None)
+                        status = getattr(card, "status", "unknown")
+                        parent.log_message("DEBUG", f"Row {row}: {card.name}")
+                        parent.log_message("DEBUG", f"  - card_path: {card_path}")
+                        parent.log_message("DEBUG", f"  - status: {status}")
+                        parent.log_message(
+                            "DEBUG",
+                            f"  - has card_path attr: {hasattr(card, 'card_path')}",
+                        )
+                        parent.log_message(
+                            "DEBUG", f"  - has status attr: {hasattr(card, 'status')}"
+                        )
+
                     # Check if card has been generated (has card_path or status is completed)
                     if (hasattr(card, "card_path") and card.card_path) or (
                         hasattr(card, "status") and card.status == "completed"
@@ -1401,6 +1449,13 @@ class CardManagementTab(QWidget):
                         has_generated = True
                     else:
                         has_pending = True
+
+        # Debug final state
+        if parent and hasattr(parent, "log_message"):
+            parent.log_message(
+                "DEBUG",
+                f"Button visibility: has_pending={has_pending}, has_generated={has_generated}, selected_count={len(selected_rows)}",
+            )
 
         # Update button visibility
         # Show Generate Selected only if there are pending cards selected
@@ -1451,6 +1506,7 @@ class CardManagementTab(QWidget):
             self.table_manager.refresh_table()
             self.update_stats()
             self.update_generation_stats()
+            self.update_button_visibility()  # Update button visibility after clearing
 
             parent = get_main_window()
             if parent and hasattr(parent, "log_message"):
@@ -3202,6 +3258,10 @@ class MTGDeckBuilder(QMainWindow):
                 "DEBUG", f"Row {current_row} is out of range (0-{total_cards-1})"
             )
 
+        # Update button visibility when selection changes
+        if hasattr(self.cards_tab, "update_button_visibility"):
+            self.cards_tab.update_button_visibility()
+
     def on_card_selection_changed_in_generation(self):
         """Handle card selection in Generation Tab table"""
         selected_rows = set()
@@ -3209,7 +3269,8 @@ class MTGDeckBuilder(QMainWindow):
             selected_rows.add(item.row())
 
         # Update button visibility based on new selection
-        self.update_button_visibility()
+        if hasattr(self.cards_tab, "update_button_visibility"):
+            self.cards_tab.update_button_visibility()
 
         if selected_rows:
             row = min(selected_rows)  # Get first selected row

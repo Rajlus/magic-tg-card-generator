@@ -229,6 +229,8 @@ class CardCRUDManager(QObject):
                 self.parent_widget.update_stats()
             if hasattr(self.parent_widget, "update_generation_stats"):
                 self.parent_widget.update_generation_stats()
+            if hasattr(self.parent_widget, "update_button_visibility"):
+                self.parent_widget.update_button_visibility()
 
         # Emit signal
         self.cards_loaded.emit(self.cards)

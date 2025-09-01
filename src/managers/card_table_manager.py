@@ -96,6 +96,7 @@ class CardTableManager(QObject):
         super().__init__()
         self.table = table_widget
         self.cards = cards or []
+        self.logger = None  # Initialize logger as None first
         self.commander_colors = set()
         self.filtered_cards = []
 
