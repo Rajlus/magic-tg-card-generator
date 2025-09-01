@@ -1,7 +1,7 @@
 """Deck management services."""
 
 from .deck_validator import DeckValidator, DeckFormat, ValidationResult
-from .card_collection import CardCollection
+from ...domain.models.card_collection import CardCollection
 
 try:
     from .deck_builder_service import DeckBuilderService
