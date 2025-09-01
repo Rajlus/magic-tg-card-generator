@@ -1368,15 +1368,31 @@ class CardManagementTab(QWidget):
         color_stats = stats.get("color_stats", {})
         
         total = len(cards_list)
-        lands = type_dist.get("lands", 0)
-        creatures = type_dist.get("creatures", 0)
-        instants = type_dist.get("instants", 0)
-        sorceries = type_dist.get("sorceries", 0)
-        artifacts = type_dist.get("artifacts", 0)
-        enchantments = type_dist.get("enchantments", 0)
+        # Handle TypeDistribution object or dictionary
+        if hasattr(type_dist, '__dict__'):
+            # It's an object, access attributes
+            lands = getattr(type_dist, "lands", 0)
+            creatures = getattr(type_dist, "creatures", 0)
+            instants = getattr(type_dist, "instants", 0)
+            sorceries = getattr(type_dist, "sorceries", 0)
+            artifacts = getattr(type_dist, "artifacts", 0)
+            enchantments = getattr(type_dist, "enchantments", 0)
+        else:
+            # It's a dictionary
+            lands = type_dist.get("lands", 0)
+            creatures = type_dist.get("creatures", 0)
+            instants = type_dist.get("instants", 0)
+            sorceries = type_dist.get("sorceries", 0)
+            artifacts = type_dist.get("artifacts", 0)
+            enchantments = type_dist.get("enchantments", 0)
 
         # Get color distribution from DeckStatistics
-        color_dist = color_stats.get("color_distribution", {})
+        if hasattr(color_stats, "color_distribution"):
+            # It's an object
+            color_dist = getattr(color_stats, "color_distribution", {})
+        else:
+            # It's a dictionary
+            color_dist = color_stats.get("color_distribution", {})
         color_counts = {k: v for k, v in color_dist.items() if k in ["W", "U", "B", "R", "G", "C"]}
         
         # Get deck colors from statistics
