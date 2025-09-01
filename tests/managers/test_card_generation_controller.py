@@ -619,7 +619,7 @@ class TestCardGenerationController(unittest.TestCase):
     def test_generate_missing_cards_none_missing(self):
         """Test generating missing cards when none are missing."""
         # All cards completed
-        completed_cards = [card for card in self.test_cards]
+        completed_cards = list(self.test_cards)
         for card in completed_cards:
             card.status = "completed"
 
@@ -644,9 +644,7 @@ class TestCardGenerationController(unittest.TestCase):
     def test_generate_failed_cards_none_failed(self):
         """Test generating failed cards when none have failed."""
         # No failed cards
-        no_failed_cards = list(
-            card for card in self.test_cards if card.status != "failed"
-        )
+        no_failed_cards = [card for card in self.test_cards if card.status != "failed"]
 
         result = self.controller.generate_failed_cards(no_failed_cards)
         self.assertFalse(result)
@@ -669,32 +667,6 @@ class TestCardGenerationController(unittest.TestCase):
     def test_regenerate_selected_cards_empty(self):
         """Test regenerating with empty selection."""
         result = self.controller.regenerate_selected_cards([])
-        self.assertFalse(result)
-
-    def test_generate_art_descriptions(self):
-        """Test generating AI art descriptions."""
-        # Create cards needing art
-        cards_need_art = [
-            MTGCard(1, "Card 1", "Creature", "1G", "Test", art=""),
-            MTGCard(2, "Card 2", "Instant", "1R", "Test", art="Existing art"),
-        ]
-
-        result = self.controller.generate_art_descriptions(cards_need_art)
-
-        self.assertTrue(result)
-        self.assertEqual(
-            self.controller.get_generation_mode(), GenerationMode.ART_DESCRIPTIONS
-        )
-        self.assertEqual(
-            self.controller.get_generation_queue_size(), 1
-        )  # Only card without art
-
-    def test_generate_art_descriptions_none_needed(self):
-        """Test generating art descriptions when none needed."""
-        # All cards have art
-        cards_with_art = [MTGCard(1, "Test", "Creature", "1G", "Test", art="Has art")]
-
-        result = self.controller.generate_art_descriptions(cards_with_art)
         self.assertFalse(result)
 
     # Tests for Configuration

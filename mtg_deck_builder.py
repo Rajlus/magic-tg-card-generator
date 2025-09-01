@@ -52,6 +52,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+# Import new AI services
+from src.ai_services import (
+    AIService,
+    AIWorker,
+    ArtDescriptionGenerator,
+    CardGenerator,
+    ThemeAnalyzer,
+)
+
 # Import domain model - this provides backward compatibility for any code importing from this module
 from src.domain.models import (
     MTGCard,
@@ -83,178 +92,8 @@ def get_main_window():
     return None
 
 
-class AIWorker(QThread):
-    """Worker thread for AI API calls"""
-
-    result_ready = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
-    progress_update = pyqtSignal(str)
-    log_message = pyqtSignal(str, str)  # level, message - for thread-safe logging
-
-    def __init__(self):
-        super().__init__()
-        self.api_key = os.getenv(
-            "OPENROUTER_API_KEY",
-            "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",
-        )
-        self.model = "openai/gpt-oss-120b"
-        self.task = ""
-        self.prompt = ""
-
-    def set_task(self, task: str, prompt: str):
-        self.task = task
-        self.prompt = prompt
-
-    def run(self):
-        """Execute AI request"""
-        try:
-            # Note: We can't directly access GUI elements from worker thread
-            # Use signals instead for thread-safe communication
-
-            # Set parameters based on task
-            temperature = 0.7
-            max_tokens = 32000 if self.task == "generate_cards" else 4000
-            timeout = 120 if self.task == "generate_cards" else 60
-
-            # Log AI call parameters
-            self.log_message.emit("GENERATING", f"AI Call: {self.task}")
-            self.log_message.emit(
-                "DEBUG",
-                f"Parameters: model={self.model}, max_tokens={max_tokens}, temperature={temperature}, timeout={timeout}s",
-            )
-
-            self.progress_update.emit(f"Calling {self.model}...")
-
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
-
-            # Different system prompts based on task
-            if self.task == "analyze_theme":
-                system_prompt = self.get_theme_analyzer_prompt()
-            elif self.task == "generate_cards":
-                system_prompt = self.get_card_generator_prompt()
-            elif self.task == "generate_art":
-                system_prompt = self.get_art_description_prompt()
-            else:
-                system_prompt = "You are a helpful assistant."
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": self.prompt},
-            ]
-
-            # Log request size
-            request_size = len(json.dumps(messages))
-            self.log_message.emit("DEBUG", f"Request size: {request_size} characters")
-
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-                timeout=timeout,
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-
-                # Log response info
-                usage = data.get("usage", {})
-                tokens_used = usage.get("completion_tokens", 0)
-                total_tokens = usage.get("total_tokens", 0)
-
-                self.log_message.emit(
-                    "SUCCESS",
-                    f"Response received: {tokens_used} completion tokens, {total_tokens} total tokens",
-                )
-
-                # Calculate and log cost
-                if self.model == "openai/gpt-oss-120b":
-                    # Pricing per 1M tokens
-                    input_cost = (usage.get("prompt_tokens", 0) / 1_000_000) * 0.072
-                    output_cost = (tokens_used / 1_000_000) * 0.28
-                    total_cost = input_cost + output_cost
-                    self.log_message.emit(
-                        "INFO",
-                        f"API Cost: ${total_cost:.4f} (Input: ${input_cost:.4f}, Output: ${output_cost:.4f})",
-                    )
-
-                self.result_ready.emit(content)
-            else:
-                error_msg = f"API Error {response.status_code}: {response.text[:200]}"
-                self.log_message.emit("ERROR", error_msg)
-                self.error_occurred.emit(error_msg)
-
-        except Exception as e:
-            error_msg = f"Error: {str(e)}"
-            self.log_message.emit("ERROR", error_msg)
-            self.error_occurred.emit(error_msg)
-
-    def get_theme_analyzer_prompt(self) -> str:
-        """System prompt for theme analysis"""
-        return """You are an MTG Set Design Expert. Analyze the given theme and provide:
-1. Color Identity (primary and secondary colors with reasoning)
-2. Suggested Commander(s)
-3. Key mechanics that fit the theme
-4. Important characters/locations for legendary cards
-5. Overall deck strategy
-
-Format your response clearly with sections."""
-
-    def get_card_generator_prompt(self) -> str:
-        """System prompt for generating 100 cards"""
-        return """You MUST generate EXACTLY 100 unique MTG cards for a Commander deck. DO NOT STOP until you have generated all 100 cards.
-
-REQUIRED DISTRIBUTION (MUST generate exactly these amounts):
-- Card 1: Commander (Legendary Creature)
-- Cards 2-38: Lands (37 total)
-- Cards 39-68: Creatures (30 total)
-- Cards 69-78: Instants (10 total)
-- Cards 79-88: Sorceries (10 total)
-- Cards 89-95: Artifacts (7 total)
-- Cards 96-100: Enchantments (5 total)
-
-For EACH card provide ALL fields in this EXACT format:
-[NUMBER]. [NAME] | [TYPE]
-Cost: [COST or "-" for lands]
-Text: [ABILITIES]
-P/T: [X/X for creatures or "-" for non-creatures]
-Flavor: [FLAVOR TEXT]
-Rarity: [mythic/rare/uncommon/common]
-
-IMPORTANT:
-- Number cards from 1 to 100
-- DO NOT STOP before card 100
-- Keep responses concise but complete
-- Ensure thematic consistency"""
-
-    def get_art_description_prompt(self) -> str:
-        """System prompt for art descriptions"""
-        return """You are an expert at creating detailed art descriptions for MTG cards.
-
-CRITICAL RULES for fandom characters:
-1. Percy Jackson: Teenage characters in MODERN clothing (Camp Half-Blood orange t-shirts, jeans, sneakers). NO ARMOR.
-2. Harry Potter: Hogwarts robes OR modern muggle clothes. Wands, not medieval weapons.
-3. Marvel/DC: Canonical superhero costumes or civilian clothes from comics/movies.
-4. Star Wars: Exact movie/show appearances (Jedi robes, rebel uniforms, etc).
-
-For EACH card, create a 2-3 sentence visual description that:
-- Captures the character's canonical appearance
-- Describes the scene/action if relevant
-- Uses vivid, specific details for AI image generation
-- Maintains thematic consistency
-
-Format: [NUMBER]. [DETAILED ART DESCRIPTION]"""
-
-
-# CardGeneratorWorker class moved to src/managers/card_generation_controller.py
+# AIWorker class moved to src/ai_services/ai_worker.py
+# Old AIWorker implementation removed - now using new AI service architecture
 
 
 class ThemeConfigTab(QWidget):

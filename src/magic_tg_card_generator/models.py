@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class CardType(str, Enum):
@@ -45,20 +45,22 @@ class Card(BaseModel):
     rarity: str = Field(default="Common", pattern=r"^(Common|Uncommon|Rare|Mythic)$")
     created_at: datetime = Field(default_factory=datetime.now)
 
-    @validator("power", "toughness")
-    def validate_creature_stats(cls, v: Optional[int], values: dict) -> Optional[int]:
-        """Validate that power/toughness are only set for creatures."""
-        if v is not None and values.get("card_type") != CardType.CREATURE:
-            raise ValueError("Power and toughness can only be set for creatures")
-        return v
-
-    @validator("power", "toughness", pre=False)
-    def validate_creature_requirements(
-        cls, v: Optional[int], values: dict
+    @field_validator("power", "toughness")
+    @classmethod
+    def validate_creature_stats(
+        cls, v: Optional[int], info: ValidationInfo
     ) -> Optional[int]:
-        """Validate that creatures have power and toughness."""
-        if values.get("card_type") == CardType.CREATURE and v is None:
+        """Validate power and toughness for creatures."""
+        card_type = info.data.get("card_type")
+
+        # Non-creatures cannot have power/toughness
+        if v is not None and card_type != CardType.CREATURE:
+            raise ValueError("Power and toughness can only be set for creatures")
+
+        # Creatures must have power and toughness
+        if card_type == CardType.CREATURE and v is None:
             raise ValueError("Creatures must have power and toughness")
+
         return v
 
     @property
@@ -135,11 +137,10 @@ class Card(BaseModel):
             and self.text == other.text
         )
 
-    class Config:
-        """Pydantic model configuration."""
-
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             CardType: lambda v: v.value,
             Color: lambda v: v.value,
             datetime: lambda v: v.isoformat(),
         }
+    )

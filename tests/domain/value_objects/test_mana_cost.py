@@ -1,8 +1,8 @@
 """Comprehensive tests for the Mana Cost value object."""
 
-import pytest
-from typing import List, Dict
+# typing imports removed - using built-in types
 
+import pytest
 from magic_tg_card_generator.models import Card, CardType, Color
 
 
@@ -15,9 +15,9 @@ class TestManaCostParsing:
             name="Free Spell",
             card_type=CardType.INSTANT,
             mana_cost="",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.mana_cost == ""
         assert card.converted_mana_cost == 0
 
@@ -27,9 +27,9 @@ class TestManaCostParsing:
             name="Zero Cost Spell",
             card_type=CardType.INSTANT,
             mana_cost="0",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.mana_cost == "0"
         assert card.converted_mana_cost == 0
 
@@ -40,24 +40,24 @@ class TestManaCostParsing:
                 name=f"Generic {i} Spell",
                 card_type=CardType.INSTANT,
                 mana_cost=str(i),
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
-            
+
             assert card.mana_cost == str(i)
             assert card.converted_mana_cost == i
 
     def test_parse_double_digit_generic_mana(self) -> None:
         """Test parsing double digit generic mana costs."""
         test_costs = [10, 11, 15, 20, 99]
-        
+
         for cost in test_costs:
             card = Card(
                 name=f"Generic {cost} Spell",
                 card_type=CardType.SORCERY,
                 mana_cost=str(cost),
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
-            
+
             assert card.mana_cost == str(cost)
             assert card.converted_mana_cost == cost
 
@@ -69,17 +69,17 @@ class TestManaCostParsing:
             ("B", Color.BLACK, 1),
             ("R", Color.RED, 1),
             ("G", Color.GREEN, 1),
-            ("C", Color.COLORLESS, 1)
+            ("C", Color.COLORLESS, 1),
         ]
-        
+
         for mana_symbol, color, expected_cmc in color_tests:
             card = Card(
                 name=f"Test {mana_symbol} Spell",
                 card_type=CardType.INSTANT,
                 mana_cost=mana_symbol,
-                color=color
+                color=color,
             )
-            
+
             assert card.mana_cost == mana_symbol
             assert card.converted_mana_cost == expected_cmc
 
@@ -92,17 +92,17 @@ class TestManaCostParsing:
             ("RRRR", 4),
             ("GGGGG", 5),
             ("WUBRG", 5),
-            ("WWUUBBRRGG", 10)
+            ("WWUUBBRRGG", 10),
         ]
-        
+
         for mana_cost, expected_cmc in test_cases:
             card = Card(
                 name=f"Test {mana_cost} Spell",
                 card_type=CardType.ENCHANTMENT,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR if len(set(mana_cost)) > 1 else Color.COLORLESS
+                color=Color.MULTICOLOR if len(set(mana_cost)) > 1 else Color.COLORLESS,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
@@ -118,17 +118,17 @@ class TestManaCostParsing:
             ("2WW", 4),
             ("3UU", 5),
             ("10RR", 12),
-            ("15WWUUBBRRGG", 25)  # 15 + 10 colored mana
+            ("15WWUUBBRRGG", 25),  # 15 + 10 colored mana
         ]
-        
+
         for mana_cost, expected_cmc in test_cases:
             card = Card(
                 name=f"Test {mana_cost} Spell",
                 card_type=CardType.SORCERY,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
@@ -142,44 +142,48 @@ class TestManaCostParsing:
             ("X2R", 3),
             ("XX", 0),  # Multiple X still counts as 0
             ("XXX", 0),
-            ("XX2WW", 4)  # XX = 0, 2 = 2, WW = 2
+            ("XX2WW", 4),  # XX = 0, 2 = 2, WW = 2
         ]
-        
+
         for mana_cost, expected_cmc in test_cases:
             card = Card(
                 name=f"Test {mana_cost} Spell",
                 card_type=CardType.INSTANT,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
     def test_parse_complex_mana_costs(self) -> None:
         """Test parsing complex real-world mana costs."""
         real_world_costs = [
-            ("2WW", 4),        # Wrath of God
-            ("1UU", 3),        # Counterspell
-            ("BBB", 3),        # Phyrexian Obliterator
-            ("RRR", 3),        # Ball Lightning
-            ("GGG", 3),        # Leatherback Baloth
-            ("WUBRG", 5),      # Child of Alara
-            ("2WUBRG", 7),     # Expensive 5-color spell
-            ("X2WW", 4),       # X + 4 CMC (X counts as 0)
-            ("16", 16),        # Draco's mana cost
-            ("0", 0),          # Ornithopter
-            ("", 0)            # Lands
+            ("2WW", 4),  # Wrath of God
+            ("1UU", 3),  # Counterspell
+            ("BBB", 3),  # Phyrexian Obliterator
+            ("RRR", 3),  # Ball Lightning
+            ("GGG", 3),  # Leatherback Baloth
+            ("WUBRG", 5),  # Child of Alara
+            ("2WUBRG", 7),  # Expensive 5-color spell
+            ("X2WW", 4),  # X + 4 CMC (X counts as 0)
+            ("16", 16),  # Draco's mana cost
+            ("0", 0),  # Ornithopter
+            ("", 0),  # Lands
         ]
-        
+
         for mana_cost, expected_cmc in real_world_costs:
             card = Card(
                 name=f"Real World {mana_cost} Spell",
-                card_type=CardType.ARTIFACT if mana_cost in ["0", ""] else CardType.SORCERY,
+                card_type=CardType.ARTIFACT
+                if mana_cost in ["0", ""]
+                else CardType.SORCERY,
                 mana_cost=mana_cost,
-                color=Color.COLORLESS if mana_cost in ["0", "", "16"] else Color.MULTICOLOR
+                color=Color.COLORLESS
+                if mana_cost in ["0", "", "16"]
+                else Color.MULTICOLOR,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
@@ -191,63 +195,102 @@ class TestManaCostValidation:
         """Test that valid mana cost patterns are accepted."""
         valid_patterns = [
             "",
-            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-            "10", "11", "15", "20", "99",
-            "W", "U", "B", "R", "G", "C",
-            "WW", "UU", "BB", "RR", "GG", "CC",
-            "WUBRG", "WUBRGC",
-            "1W", "2U", "3B", "4R", "5G", "6C",
-            "X", "XX", "XXX",
-            "XW", "XUU", "X2R",
-            "2WW", "3UU", "4BB", "5RR", "6GG",
-            "10WUBRG", "15CC", "20XWUBRG"
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "15",
+            "20",
+            "99",
+            "W",
+            "U",
+            "B",
+            "R",
+            "G",
+            "C",
+            "WW",
+            "UU",
+            "BB",
+            "RR",
+            "GG",
+            "CC",
+            "WUBRG",
+            "WUBRGC",
+            "1W",
+            "2U",
+            "3B",
+            "4R",
+            "5G",
+            "6C",
+            "X",
+            "XX",
+            "XXX",
+            "XW",
+            "XUU",
+            "X2R",
+            "2WW",
+            "3UU",
+            "4BB",
+            "5RR",
+            "6GG",
+            "10WUBRG",
+            "15CC",
+            "20XWUBRG",
         ]
-        
+
         for mana_cost in valid_patterns:
             # Should not raise ValidationError
             card = Card(
                 name=f"Valid {mana_cost} Card",
                 card_type=CardType.INSTANT,
                 mana_cost=mana_cost,
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
             assert card.mana_cost == mana_cost
 
     def test_invalid_mana_cost_patterns_raise_error(self) -> None:
         """Test that invalid mana cost patterns raise ValidationError."""
         invalid_patterns = [
-            "Y",           # Invalid mana symbol
-            "Z",           # Invalid mana symbol  
-            "1Y",          # Contains invalid symbol
-            "2Z3",         # Contains invalid symbol
-            "WQ",          # Q is not valid
-            "UL",          # L is not valid
-            "BH",          # H is not valid
-            "RF",          # F is not valid
-            "GJ",          # J is not valid
-            "1WY",         # Mixed valid and invalid
-            "abc",         # Lowercase letters
-            "wubrg",       # Lowercase colored mana
-            "1w2u",        # Lowercase in mixed cost
-            "!@#",         # Special characters
-            "W U",         # Spaces not allowed
-            "1-R",         # Hyphens not allowed
-            "W/U",         # Slashes not allowed (hybrid mana not supported in this pattern)
-            "(2/W)",       # Parentheses not allowed
-            "{W}",         # Curly braces not allowed
+            "Y",  # Invalid mana symbol
+            "Z",  # Invalid mana symbol
+            "1Y",  # Contains invalid symbol
+            "2Z3",  # Contains invalid symbol
+            "WQ",  # Q is not valid
+            "UL",  # L is not valid
+            "BH",  # H is not valid
+            "RF",  # F is not valid
+            "GJ",  # J is not valid
+            "1WY",  # Mixed valid and invalid
+            "abc",  # Lowercase letters
+            "wubrg",  # Lowercase colored mana
+            "1w2u",  # Lowercase in mixed cost
+            "!@#",  # Special characters
+            "W U",  # Spaces not allowed
+            "1-R",  # Hyphens not allowed
+            "W/U",  # Slashes not allowed (hybrid mana not supported in this pattern)
+            "(2/W)",  # Parentheses not allowed
+            "{W}",  # Curly braces not allowed
         ]
-        
+
         from pydantic import ValidationError
-        
+
         for invalid_cost in invalid_patterns:
             with pytest.raises(ValidationError) as exc_info:
                 Card(
                     name=f"Invalid {invalid_cost} Card",
                     card_type=CardType.INSTANT,
                     mana_cost=invalid_cost,
-                    color=Color.COLORLESS
+                    color=Color.COLORLESS,
                 )
-            
+
             assert "String should match pattern" in str(exc_info.value)
 
 
@@ -257,22 +300,22 @@ class TestManaCostCMCCalculation:
     def test_cmc_calculation_boundary_cases(self) -> None:
         """Test CMC calculation for boundary cases."""
         boundary_cases = [
-            ("", 0),           # Empty cost
-            ("0", 0),          # Zero cost
-            ("1", 1),          # Minimum positive cost
-            ("9", 9),          # Maximum single digit
-            ("10", 10),        # Minimum double digit
-            ("99", 99),        # Maximum reasonable cost
+            ("", 0),  # Empty cost
+            ("0", 0),  # Zero cost
+            ("1", 1),  # Minimum positive cost
+            ("9", 9),  # Maximum single digit
+            ("10", 10),  # Minimum double digit
+            ("99", 99),  # Maximum reasonable cost
         ]
-        
+
         for mana_cost, expected_cmc in boundary_cases:
             card = Card(
                 name=f"Boundary {mana_cost} Card",
                 card_type=CardType.ARTIFACT,
                 mana_cost=mana_cost,
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
-            
+
             assert card.converted_mana_cost == expected_cmc
 
     def test_cmc_calculation_with_all_colors(self) -> None:
@@ -310,17 +353,17 @@ class TestManaCostCMCCalculation:
             ("WBRG", 4),
             ("UBRG", 4),
             ("WUBRG", 5),
-            ("WUBRGC", 6)
+            ("WUBRGC", 6),
         ]
-        
+
         for mana_cost, expected_cmc in color_combinations:
             card = Card(
                 name=f"Color {mana_cost} Card",
                 card_type=CardType.ENCHANTMENT,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR if len(set(mana_cost)) > 1 else Color.COLORLESS
+                color=Color.MULTICOLOR if len(set(mana_cost)) > 1 else Color.COLORLESS,
             )
-            
+
             assert card.converted_mana_cost == expected_cmc
 
     def test_cmc_calculation_with_multiple_x(self) -> None:
@@ -337,17 +380,17 @@ class TestManaCostCMCCalculation:
             ("X1W", 2),
             ("XX2U", 3),
             ("XXX3B", 4),
-            ("XXWUBRG", 5)  # XX = 0, WUBRG = 5
+            ("XXWUBRG", 5),  # XX = 0, WUBRG = 5
         ]
-        
+
         for mana_cost, expected_cmc in x_cases:
             card = Card(
                 name=f"X Cost {mana_cost} Card",
                 card_type=CardType.SORCERY,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             assert card.converted_mana_cost == expected_cmc
 
     def test_cmc_calculation_stress_test(self) -> None:
@@ -359,17 +402,17 @@ class TestManaCostCMCCalculation:
             ("50WUBRG", 55),
             ("100WUBRGWUBRGWUBRG", 115),  # 100 + 15 colored
             ("X999", 999),
-            ("XX500WUBRG", 505)  # XX = 0, 500 = 500, WUBRG = 5
+            ("XX500WUBRG", 505),  # XX = 0, 500 = 500, WUBRG = 5
         ]
-        
+
         for mana_cost, expected_cmc in stress_cases:
             card = Card(
                 name=f"Stress {mana_cost} Card",
                 card_type=CardType.ARTIFACT,
                 mana_cost=mana_cost,
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
-            
+
             assert card.converted_mana_cost == expected_cmc
 
 
@@ -389,17 +432,17 @@ class TestManaCostUtilityMethods:
             "WUBRG",
             "X",
             "X2WW",
-            "10WUBRG"
+            "10WUBRG",
         ]
-        
+
         for mana_cost in test_cases:
             card = Card(
                 name=f"String {mana_cost} Card",
                 card_type=CardType.INSTANT,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             # Mana cost should be preserved as string
             assert isinstance(card.mana_cost, str)
             assert card.mana_cost == mana_cost
@@ -410,12 +453,12 @@ class TestManaCostUtilityMethods:
             name="Immutable Card",
             card_type=CardType.INSTANT,
             mana_cost="2WW",
-            color=Color.WHITE
+            color=Color.WHITE,
         )
-        
+
         original_cost = card.mana_cost
         original_cmc = card.converted_mana_cost
-        
+
         # CMC should always return the same value for the same cost
         assert card.converted_mana_cost == original_cmc
         assert card.mana_cost == original_cost
@@ -424,28 +467,28 @@ class TestManaCostUtilityMethods:
         """Test that mana cost parsing is case sensitive."""
         # Uppercase should work (these are valid)
         valid_costs = ["W", "U", "B", "R", "G", "C", "X", "2W", "WUBRG"]
-        
+
         for cost in valid_costs:
             card = Card(
                 name=f"Valid {cost} Card",
                 card_type=CardType.INSTANT,
                 mana_cost=cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
             assert card.mana_cost == cost
 
         # Lowercase should fail (these should raise ValidationError)
         from pydantic import ValidationError
-        
+
         invalid_costs = ["w", "u", "b", "r", "g", "c", "x", "2w", "wubrg"]
-        
+
         for cost in invalid_costs:
             with pytest.raises(ValidationError):
                 Card(
                     name=f"Invalid {cost} Card",
                     card_type=CardType.INSTANT,
                     mana_cost=cost,
-                    color=Color.MULTICOLOR
+                    color=Color.MULTICOLOR,
                 )
 
 
@@ -474,17 +517,17 @@ class TestManaCostRealWorldExamples:
             ("Jace, the Mind Sculptor", "2UU", 4),
             ("Snapcaster Mage", "1U", 2),
             ("Delver of Secrets", "U", 1),
-            ("Brainstorm", "U", 1)
+            ("Brainstorm", "U", 1),
         ]
-        
+
         for name, mana_cost, expected_cmc in famous_cards:
             card = Card(
                 name=name,
                 card_type=CardType.INSTANT,  # Simplified for test
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
@@ -497,9 +540,9 @@ class TestManaCostRealWorldExamples:
             ("Ulamog, the Infinite Gyre", "11", 11),
             ("Kozilek, Butcher of Truth", "10", 10),
             ("Blightsteel Colossus", "12", 12),
-            ("Darksteel Colossus", "11", 11)
+            ("Darksteel Colossus", "11", 11),
         ]
-        
+
         for name, mana_cost, expected_cmc in expensive_cards:
             card = Card(
                 name=name,
@@ -507,9 +550,9 @@ class TestManaCostRealWorldExamples:
                 mana_cost=mana_cost,
                 color=Color.COLORLESS,
                 power=1,  # Simplified for test
-                toughness=1
+                toughness=1,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc
 
@@ -525,16 +568,16 @@ class TestManaCostRealWorldExamples:
             ("Rolling Thunder", "XRR", 2),
             ("Blaze", "XR", 1),
             ("Hurricane", "XG", 1),
-            ("Earthquake", "XR", 1)
+            ("Earthquake", "XR", 1),
         ]
-        
+
         for name, mana_cost, expected_cmc in x_cards:
             card = Card(
                 name=name,
                 card_type=CardType.SORCERY,
                 mana_cost=mana_cost,
-                color=Color.MULTICOLOR
+                color=Color.MULTICOLOR,
             )
-            
+
             assert card.mana_cost == mana_cost
             assert card.converted_mana_cost == expected_cmc

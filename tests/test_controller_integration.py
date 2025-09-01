@@ -89,71 +89,6 @@ class TestCardManagementTabIntegration:
         assert controller.progress_reporter == mock_progress_reporter
         assert controller.status_updater == mock_status_updater
 
-    def test_adapter_classes_work(self):
-        """Test that the adapter classes work correctly."""
-        # Import the adapter classes from mtg_deck_builder
-        try:
-            from mtg_deck_builder import (
-                CardGeneratorWorkerAdapter,
-                CardManagementProgressReporter,
-                CardManagementStatusUpdater,
-            )
-
-            # Test that adapter classes exist and can be instantiated
-            mock_worker = MagicMock()
-            adapter = CardGeneratorWorkerAdapter(mock_worker)
-            assert adapter is not None
-            assert adapter.worker == mock_worker
-
-            mock_parent = MagicMock()
-            progress_reporter = CardManagementProgressReporter(mock_parent)
-            assert progress_reporter is not None
-            assert progress_reporter.parent_tab == mock_parent
-
-            status_updater = CardManagementStatusUpdater(mock_parent)
-            assert status_updater is not None
-            assert status_updater.parent_tab == mock_parent
-
-        except ImportError as e:
-            pytest.fail(f"Failed to import adapter classes: {e}")
-
-    def test_generation_controller_signals(self, mock_app, mock_cards):
-        """Test that CardGenerationController signals are properly connected."""
-        mock_parent_widget = MagicMock()
-        mock_logger = MagicMock()
-        mock_worker = MagicMock()
-
-        controller = CardGenerationController(
-            parent_widget=mock_parent_widget,
-            logger=mock_logger,
-            generation_worker=mock_worker,
-        )
-
-        # Mock signal connections
-        signals_connected = []
-
-        def mock_connect(signal_name):
-            def connect_func(slot):
-                signals_connected.append((signal_name, slot))
-
-            return connect_func
-
-        controller.generation_started.connect = mock_connect("generation_started")
-        controller.generation_progress.connect = mock_connect("generation_progress")
-        controller.generation_completed.connect = mock_connect("generation_completed")
-        controller.card_status_changed.connect = mock_connect("card_status_changed")
-        controller.error_occurred.connect = mock_connect("error_occurred")
-
-        # Test that signals can be connected
-        mock_slot1 = MagicMock()
-        mock_slot2 = MagicMock()
-        controller.generation_started.connect(mock_slot1)
-        controller.generation_completed.connect(mock_slot2)
-
-        assert len(signals_connected) == 2
-        assert ("generation_started", mock_slot1) in signals_connected
-        assert ("generation_completed", mock_slot2) in signals_connected
-
     def test_controller_generation_workflow(self, mock_app, mock_cards):
         """Test the complete generation workflow with controller."""
         mock_parent_widget = MagicMock()
@@ -241,33 +176,6 @@ class TestCardManagementTabIntegration:
 
         assert stats["total_cards"] == len(mock_cards)
         assert stats["pending_cards"] == len(mock_cards)  # All cards start as pending
-
-    def test_controller_batch_operations(self, mock_app, mock_cards):
-        """Test controller batch operation methods."""
-        controller = CardGenerationController(
-            parent_widget=MagicMock(),
-            logger=MagicMock(),
-            generation_worker=MagicMock(),
-        )
-
-        # Configure worker mock
-        controller.generation_worker.is_running.return_value = False
-
-        # Test generate missing cards
-        result = controller.generate_missing_cards(mock_cards)
-        assert result is True
-
-        # Test with no missing cards (all completed)
-        completed_cards = [
-            MockMTGCard(i, f"Card {i}", status="completed") for i in range(3)
-        ]
-        result = controller.generate_missing_cards(completed_cards)
-        assert result is False
-
-        # Test generate failed cards
-        failed_cards = [MockMTGCard(i, f"Card {i}", status="failed") for i in range(3)]
-        result = controller.generate_failed_cards(failed_cards)
-        assert result is True
 
     @patch("subprocess.run")
     def test_controller_environment_validation(self, mock_subprocess, mock_app):

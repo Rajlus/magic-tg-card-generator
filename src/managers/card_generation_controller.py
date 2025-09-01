@@ -1012,7 +1012,7 @@ class CardGenerationController(QObject):
 
         try:
             # Validate cards for generation
-            validation_issues = self.validate_cards_for_generation(cards)
+            validation_issues = self.validate_cards_for_generation(cards, mode)
             if validation_issues:
                 issue_text = "\n".join(validation_issues)
                 self._show_error(
@@ -1237,7 +1237,9 @@ class CardGenerationController(QObject):
 
     # Public API Methods - Validation
 
-    def validate_cards_for_generation(self, cards: list[MTGCard]) -> list[str]:
+    def validate_cards_for_generation(
+        self, cards: list[MTGCard], mode: GenerationMode = None
+    ) -> list[str]:
         """
         Validate cards for generation requirements.
 
@@ -1262,8 +1264,11 @@ class CardGenerationController(QObject):
             if len(text) > 1000:  # Arbitrary limit for generation systems
                 issues.append(f"Card {i} ({card.name}): Text too long for generation")
 
-            # Check art description if AI generation is enabled
-            if self.config.ai_art_descriptions:
+            # Check art description if AI generation is enabled, but skip if we're generating art descriptions
+            if (
+                self.config.ai_art_descriptions
+                and mode != GenerationMode.ART_DESCRIPTIONS
+            ):
                 art = getattr(card, "art", "") or ""
                 if not art.strip():
                     issues.append(
