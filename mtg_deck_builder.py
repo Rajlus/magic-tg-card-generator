@@ -78,6 +78,15 @@ from src.managers.card_status_manager import CardStatusManager
 from src.managers.card_table_manager import CardTableManager
 from src.managers.card_validation_manager import CardValidationManager
 
+# Import UI components
+from src.ui.tabs import ThemeConfigTab
+from src.ui.widgets import (
+    BatchOperationsWidget,
+    CardFilterBar,
+    CardToolbar,
+    DeckStatsPanel,
+)
+
 # Export for backward compatibility
 __all__ = ["MTGCard", "make_safe_filename", "escape_for_shell", "convert_mana_cost"]
 
@@ -96,441 +105,9 @@ def get_main_window():
 # Old AIWorker implementation removed - now using new AI service architecture
 
 
-class ThemeConfigTab(QWidget):
-    """Tab 1: Theme & Configuration"""
-
-    theme_analyzed = pyqtSignal(str)
-    cards_generated = pyqtSignal(list)
-
-    def __init__(self):
-        super().__init__()
-        self.ai_worker = AIWorker()
-        self.ai_worker.result_ready.connect(self.on_ai_result)
-        self.ai_worker.error_occurred.connect(self.on_ai_error)
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-
-        # Theme Selection Group
-        theme_group = QGroupBox("Theme Selection")
-        theme_layout = QVBoxLayout()
-
-        # Preset vs Custom
-        self.preset_radio = QRadioButton("Preset Theme:")
-        self.custom_radio = QRadioButton("Custom Theme:")
-        self.preset_radio.setChecked(True)
-
-        self.preset_combo = QComboBox()
-        self.preset_combo.addItems(
-            [
-                "Percy Jackson",
-                "Harry Potter",
-                "Lord of the Rings",
-                "Star Wars",
-                "Marvel",
-                "Game of Thrones",
-                "Avatar (ATLA)",
-            ]
-        )
-
-        self.custom_input = QLineEdit()
-        self.custom_input.setPlaceholderText("Enter your custom theme...")
-        self.custom_input.setEnabled(False)
-
-        # Connect radio buttons
-        self.preset_radio.toggled.connect(
-            lambda checked: self.preset_combo.setEnabled(checked)
-        )
-        self.custom_radio.toggled.connect(
-            lambda checked: self.custom_input.setEnabled(checked)
-        )
-
-        theme_layout.addWidget(self.preset_radio)
-        theme_layout.addWidget(self.preset_combo)
-        theme_layout.addWidget(self.custom_radio)
-        theme_layout.addWidget(self.custom_input)
-
-        # Commander input
-        commander_label = QLabel("Commander (optional):")
-        self.commander_input = QLineEdit()
-        self.commander_input.setPlaceholderText("e.g., Percy Jackson, Son of Poseidon")
-        theme_layout.addWidget(commander_label)
-        theme_layout.addWidget(self.commander_input)
-
-        theme_group.setLayout(theme_layout)
-        layout.addWidget(theme_group)
-
-        # Color Identity Group
-        color_group = QGroupBox("Color Identity")
-        color_layout = QVBoxLayout()
-
-        self.auto_color_radio = QRadioButton("Auto (based on theme)")
-        self.manual_color_radio = QRadioButton("Manual Selection:")
-        self.preset_color_radio = QRadioButton("Preset Combination:")
-        self.auto_color_radio.setChecked(True)
-
-        # Manual color checkboxes
-        color_checkbox_layout = QHBoxLayout()
-        self.color_w = QCheckBox("W (White)")
-        self.color_u = QCheckBox("U (Blue)")
-        self.color_b = QCheckBox("B (Black)")
-        self.color_r = QCheckBox("R (Red)")
-        self.color_g = QCheckBox("G (Green)")
-
-        for cb in [
-            self.color_w,
-            self.color_u,
-            self.color_b,
-            self.color_r,
-            self.color_g,
-        ]:
-            cb.setEnabled(False)
-            color_checkbox_layout.addWidget(cb)
-
-        # Preset combinations
-        self.preset_color_combo = QComboBox()
-        self.preset_color_combo.addItems(
-            [
-                "Azorius (WU)",
-                "Dimir (UB)",
-                "Rakdos (BR)",
-                "Gruul (RG)",
-                "Selesnya (WG)",
-                "Orzhov (WB)",
-                "Izzet (UR)",
-                "Golgari (BG)",
-                "Boros (WR)",
-                "Simic (UG)",
-                "Bant (WUG)",
-                "Esper (WUB)",
-                "Grixis (UBR)",
-                "Jund (BRG)",
-                "Naya (WRG)",
-                "WUBRG (All colors)",
-            ]
-        )
-        self.preset_color_combo.setEnabled(False)
-
-        # Connect radio buttons
-        self.manual_color_radio.toggled.connect(self.toggle_color_selection)
-        self.preset_color_radio.toggled.connect(
-            lambda checked: self.preset_color_combo.setEnabled(checked)
-        )
-
-        color_layout.addWidget(self.auto_color_radio)
-        color_layout.addWidget(self.manual_color_radio)
-        color_layout.addLayout(color_checkbox_layout)
-        color_layout.addWidget(self.preset_color_radio)
-        color_layout.addWidget(self.preset_color_combo)
-
-        color_group.setLayout(color_layout)
-        layout.addWidget(color_group)
-
-        # Config selection
-        config_layout = QHBoxLayout()
-        config_layout.addWidget(QLabel("Deck Structure:"))
-        self.config_combo = QComboBox()
-        self.config_combo.addItems(
-            ["standard_commander.yaml", "spell_heavy.yaml", "creature_tribal.yaml"]
-        )
-        config_layout.addWidget(self.config_combo)
-        config_layout.addStretch()
-        layout.addLayout(config_layout)
-
-        # Action buttons
-        button_layout = QHBoxLayout()
-        self.analyze_button = QPushButton(" Analyze Theme")
-        self.generate_button = QPushButton(" Generate Full Deck")
-        self.generate_button.setEnabled(False)
-
-        self.analyze_button.clicked.connect(self.analyze_theme)
-        self.generate_button.clicked.connect(self.generate_cards)
-
-        button_layout.addWidget(self.analyze_button)
-        button_layout.addWidget(self.generate_button)
-        button_layout.addStretch()
-        layout.addLayout(button_layout)
-
-        # Output area
-        layout.addWidget(QLabel("Theme Analysis:"))
-        self.output_text = QTextEdit()
-        self.output_text.setReadOnly(True)
-        self.output_text.setMaximumHeight(200)
-        layout.addWidget(self.output_text)
-
-        layout.addStretch()
-        self.setLayout(layout)
-
-    def toggle_color_selection(self, checked):
-        """Enable/disable manual color checkboxes"""
-        for cb in [
-            self.color_w,
-            self.color_u,
-            self.color_b,
-            self.color_r,
-            self.color_g,
-        ]:
-            cb.setEnabled(checked)
-
-    def get_theme(self) -> str:
-        """Get selected theme"""
-        if self.preset_radio.isChecked():
-            return self.preset_combo.currentText()
-        else:
-            return self.custom_input.text()
-
-    def get_colors(self) -> list[str]:
-        """Get selected colors"""
-        if self.auto_color_radio.isChecked():
-            return []  # Will be determined by AI
-        elif self.manual_color_radio.isChecked():
-            colors = []
-            if self.color_w.isChecked():
-                colors.append("W")
-            if self.color_u.isChecked():
-                colors.append("U")
-            if self.color_b.isChecked():
-                colors.append("B")
-            if self.color_r.isChecked():
-                colors.append("R")
-            if self.color_g.isChecked():
-                colors.append("G")
-            return colors
-        else:
-            # Parse preset combination
-            combo = self.preset_color_combo.currentText()
-            if "WU" in combo:
-                return ["W", "U"]
-            elif "UB" in combo:
-                return ["U", "B"]
-            elif "BR" in combo:
-                return ["B", "R"]
-            elif "RG" in combo:
-                return ["R", "G"]
-            elif "WG" in combo:
-                return ["W", "G"]
-            elif "WB" in combo:
-                return ["W", "B"]
-            elif "UR" in combo:
-                return ["U", "R"]
-            elif "BG" in combo:
-                return ["B", "G"]
-            elif "WR" in combo:
-                return ["W", "R"]
-            elif "UG" in combo:
-                return ["U", "G"]
-            elif "WUG" in combo:
-                return ["W", "U", "G"]
-            elif "WUB" in combo:
-                return ["W", "U", "B"]
-            elif "UBR" in combo:
-                return ["U", "B", "R"]
-            elif "BRG" in combo:
-                return ["B", "R", "G"]
-            elif "WRG" in combo:
-                return ["W", "R", "G"]
-            elif "WUBRG" in combo:
-                return ["W", "U", "B", "R", "G"]
-        return []
-
-    def analyze_theme(self):
-        """Analyze the selected theme"""
-        theme = self.get_theme()
-        if not theme:
-            QMessageBox.warning(self, "Warning", "Please enter a theme!")
-            return
-
-        # Get parent for logging
-        parent = self.parent().parent() if hasattr(self, "parent") else None
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("INFO", f"Starting theme analysis for: {theme}")
-
-        commander = self.commander_input.text()
-        colors = self.get_colors()
-
-        if parent and hasattr(parent, "log_message"):
-            if commander:
-                parent.log_message("DEBUG", f"Commander specified: {commander}")
-            if colors:
-                parent.log_message("DEBUG", f"Colors: {', '.join(colors)}")
-            else:
-                parent.log_message("DEBUG", "Colors: Auto (based on theme)")
-
-        prompt = f"Theme: {theme}"
-        if commander:
-            prompt += f"\nCommander: {commander}"
-        if colors:
-            prompt += f"\nColors: {', '.join(colors)}"
-
-        self.output_text.append(f"Analyzing theme: {theme}...")
-        self.analyze_button.setEnabled(False)
-
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("GENERATING", "Sending theme analysis request to AI...")
-
-        self.ai_worker.set_task("analyze_theme", prompt)
-        self.ai_worker.start()
-
-    def generate_cards(self):
-        """Delegate to controller"""
-        # Note: This method generates deck via AI, not individual card images
-        # The actual implementation remains here for now as it's AI-based deck creation
-        theme = self.get_theme()
-        analysis = self.output_text.toPlainText()
-        colors = self.get_colors()
-        commander = self.commander_input.text() or f"{theme} Commander"
-
-        # Get parent for logging
-        parent = self.parent().parent() if hasattr(self, "parent") else None
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("INFO", "Starting full deck generation")
-            parent.log_message("INFO", f"Theme: {theme}")
-            parent.log_message("INFO", f"Commander: {commander}")
-            parent.log_message(
-                "INFO", f"Colors: {', '.join(colors) if colors else 'Auto'}"
-            )
-            parent.log_message("DEBUG", f"Analysis length: {len(analysis)} characters")
-
-        prompt = f"""Theme: {theme}
-Commander: {commander}
-Colors: {', '.join(colors) if colors else 'Based on theme'}
-
-{analysis}
-
-NOW GENERATE ALL 100 CARDS:
-Start with card 1 (the commander) and continue through card 100.
-Remember the exact distribution: 1 commander, 37 lands, 30 creatures, 10 instants, 10 sorceries, 7 artifacts, 5 enchantments.
-Generate them in order as specified in the system prompt.
-DO NOT STOP until you reach card 100."""
-
-        self.output_text.append("\nGenerating 100 cards (this may take a moment)...")
-        self.generate_button.setEnabled(False)
-
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("GENERATING", "Requesting 100 cards from AI...")
-            parent.log_message(
-                "DEBUG",
-                "Expected: 1 commander, 37 lands, 30 creatures, 10 instants, 10 sorceries, 7 artifacts, 5 enchantments",
-            )
-
-        self.ai_worker.set_task("generate_cards", prompt)
-        self.ai_worker.start()
-
-    def on_ai_result(self, result: str):
-        """Handle AI response"""
-        if self.ai_worker.task == "analyze_theme":
-            self.output_text.clear()
-            self.output_text.append(result)
-            self.analyze_button.setEnabled(True)
-            self.generate_button.setEnabled(True)
-            self.theme_analyzed.emit(result)
-        elif self.ai_worker.task == "generate_cards":
-            # Parse the generated cards
-            cards = self.parse_cards(result)
-            self.output_text.append(f"\n Generated {len(cards)} cards")
-
-            # Emit cards directly without art descriptions (will be generated on demand)
-            self.cards_generated.emit(cards)
-            self.generate_button.setEnabled(True)
-
-            if len(cards) < 100:
-                QMessageBox.warning(
-                    self,
-                    "Incomplete Generation",
-                    f"Only {len(cards)} cards generated. Expected 100.\nTry generating again.",
-                )
-            else:
-                QMessageBox.information(
-                    self, "Success", f"Generated {len(cards)} cards!"
-                )
-
-    def on_ai_error(self, error: str):
-        """Handle AI error"""
-        QMessageBox.critical(self, "Error", error)
-        self.analyze_button.setEnabled(True)
-        self.generate_button.setEnabled(True)
-
-    def parse_cards(self, text: str) -> list[MTGCard]:
-        """Parse AI response into card objects"""
-        parent = self.parent().parent() if hasattr(self, "parent") else None
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("DEBUG", f"Parsing AI response: {len(text)} characters")
-
-        cards = []
-        lines = text.split("\n")
-
-        if parent and hasattr(parent, "log_message"):
-            parent.log_message("DEBUG", f"Response has {len(lines)} lines")
-
-        current_card = {}
-        card_id = 1
-
-        for line in lines:
-            line = line.strip()
-
-            # Check for card number and name
-            if line and line[0].isdigit() and ". " in line:
-                # Save previous card if exists
-                if current_card and "name" in current_card:
-                    card = MTGCard(
-                        id=card_id,
-                        name=current_card.get("name", ""),
-                        type=current_card.get("type", ""),
-                        cost=current_card.get("cost", ""),
-                        text=current_card.get("text", ""),
-                        power=current_card.get("power"),
-                        toughness=current_card.get("toughness"),
-                        flavor=current_card.get("flavor", ""),
-                        rarity=current_card.get("rarity", "common"),
-                        art="",  # Will be generated separately
-                    )
-                    cards.append(card)
-                    card_id += 1
-
-                # Parse new card name and type
-                parts = line.split(". ", 1)[1].split(" | ")
-                if len(parts) == 2:
-                    current_card = {"name": parts[0].strip(), "type": parts[1].strip()}
-
-            # Parse card attributes
-            elif line.startswith("Cost:"):
-                current_card["cost"] = line.replace("Cost:", "").strip()
-            elif line.startswith("Text:"):
-                current_card["text"] = line.replace("Text:", "").strip()
-            elif line.startswith("P/T:"):
-                pt = line.replace("P/T:", "").strip()
-                if pt != "-" and "/" in pt:
-                    parts = pt.split("/")
-                    try:
-                        current_card["power"] = int(parts[0])
-                        current_card["toughness"] = int(parts[1])
-                    except:
-                        pass
-            elif line.startswith("Flavor:"):
-                current_card["flavor"] = line.replace("Flavor:", "").strip()
-            elif line.startswith("Rarity:"):
-                current_card["rarity"] = line.replace("Rarity:", "").strip().lower()
-
-        # Add last card
-        if current_card and "name" in current_card:
-            card = MTGCard(
-                id=card_id,
-                name=current_card.get("name", ""),
-                type=current_card.get("type", ""),
-                cost=current_card.get("cost", ""),
-                text=current_card.get("text", ""),
-                power=current_card.get("power"),
-                toughness=current_card.get("toughness"),
-                flavor=current_card.get("flavor", ""),
-                rarity=current_card.get("rarity", "common"),
-                art="",
-            )
-            cards.append(card)
-
-        return cards
-
-
+# ThemeConfigTab class moved to src/ui/tabs/theme_config_tab.py
+# Old ThemeConfigTab implementation removed - now using new UI architecture
+# NOTE: ThemeConfigTab is now imported from src.ui.tabs at the top of this file
 class CardManagementTab(QWidget):
     """Tab 2: Card Management Table"""
 
@@ -739,105 +316,15 @@ class CardManagementTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Toolbar
-        toolbar = QHBoxLayout()
-        self.load_button = QPushButton(" Load Deck")
-        self.reload_button = QPushButton("🔄 Reload (F5)")
-        self.reload_button.setToolTip("Reload current deck from file (F5)")
-        self.reload_button.setStyleSheet(
-            "QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 5px; }"
-        )
+        # Create toolbar widget
+        self.toolbar = CardToolbar()
+        self._connect_toolbar_signals()
+        layout.addWidget(self.toolbar)
 
-        # CSV Import/Export buttons
-        self.csv_import_button = QPushButton("📥 Import CSV")
-        self.csv_import_button.setToolTip("Import deck from CSV file")
-        self.csv_export_button = QPushButton("📤 Export CSV")
-        self.csv_export_button.setToolTip("Export deck to CSV file")
-
-        self.config_button = QPushButton("⚙️ Config")
-        self.config_button.clicked.connect(self.toggle_generation_settings)
-
-        # Auto-save indicator
-        self.auto_save_label = QLabel(" Auto-Save: Active")
-        self.auto_save_label.setStyleSheet(
-            "color: #4ec9b0; font-weight: bold; padding: 5px;"
-        )
-
-        self.load_button.clicked.connect(self.load_deck)
-        self.reload_button.clicked.connect(self.reload_current_deck)
-        self.csv_import_button.clicked.connect(self.import_csv)
-        self.csv_export_button.clicked.connect(self.export_csv)
-
-        toolbar.addWidget(self.load_button)
-        toolbar.addWidget(self.reload_button)
-        toolbar.addWidget(self.auto_save_label)
-        toolbar.addWidget(self.csv_import_button)
-        toolbar.addWidget(self.csv_export_button)
-        toolbar.addStretch()
-
-        # Generate All Pending button (moved from generation controls)
-        self.generate_all_btn = QPushButton("🚀 Generate All")
-        self.generate_all_btn.setStyleSheet(
-            "QPushButton { font-weight: bold; padding: 6px; background-color: #4CAF50; }"
-        )
-        self.generate_all_btn.setToolTip("Generate all pending cards")
-        self.generate_all_btn.clicked.connect(self.generate_all_cards)
-        toolbar.addWidget(self.generate_all_btn)
-
-        toolbar.addWidget(self.config_button)
-        layout.addLayout(toolbar)
-
-        # Filter and search
-        filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Type:"))
-        self.filter_combo = QComboBox()
-        self.filter_combo.addItems(
-            [
-                "All",
-                "Creatures",
-                "Lands",
-                "Instants",
-                "Sorceries",
-                "Artifacts",
-                "Enchantments",
-            ]
-        )
-        # Filter connections now handled by table manager
-        filter_layout.addWidget(self.filter_combo)
-
-        # Add status filter
-        filter_layout.addWidget(QLabel("Status:"))
-        self.status_filter_combo = QComboBox()
-        self.status_filter_combo.addItems(
-            ["All", "✅ Completed", "⏸️ Pending", "❌ Failed", "🔄 Generating"]
-        )
-        # Status filter connections now handled by table manager
-        filter_layout.addWidget(self.status_filter_combo)
-
-        filter_layout.addWidget(QLabel("Search:"))
-        self.search_input = QLineEdit()
-        # Search filter connections now handled by table manager
-        filter_layout.addWidget(self.search_input)
-
-        # Add filter result label
-        self.filter_result_label = QLabel("")
-        self.filter_result_label.setStyleSheet(
-            """
-            QLabel {
-                font-weight: bold;
-                color: #ff9800;
-                padding: 5px;
-                background-color: #3a3a3a;
-                border: 1px solid #555;
-                border-radius: 3px;
-            }
-        """
-        )
-        self.filter_result_label.setVisible(False)  # Hidden initially
-        filter_layout.addWidget(self.filter_result_label)
-
-        filter_layout.addStretch()
-        layout.addLayout(filter_layout)
+        # Create filter bar widget
+        self.filter_bar = CardFilterBar()
+        self._connect_filter_bar_signals()
+        layout.addWidget(self.filter_bar)
 
         # Table
         self.table = QTableWidget()
@@ -902,13 +389,14 @@ class CardManagementTab(QWidget):
 
         layout.addWidget(self.table)
 
-        # Color Distribution only (stats moved to generation settings)
-        self.color_label = QLabel(" Colors: -")
-        self.color_label.setWordWrap(True)
-        self.color_label.setStyleSheet(
-            "font-weight: bold; color: #ce9178; padding: 5px;"
-        )
-        layout.addWidget(self.color_label)
+        # Create deck statistics panel widget
+        self.stats_panel = DeckStatsPanel()
+        layout.addWidget(self.stats_panel)
+
+        # Get references to individual labels for backward compatibility
+        self.generation_stats_label = self.stats_panel.get_generation_label()
+        self.type_stats_label = self.stats_panel.get_type_label()
+        self.color_label = self.stats_panel.get_color_label()
 
         # Edit buttons with Add/Delete functionality
         edit_layout = QHBoxLayout()
@@ -952,41 +440,7 @@ class CardManagementTab(QWidget):
         separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator)
 
-        # Stats and Progress (always visible)
-        stats_layout = QHBoxLayout()
-
-        # Generation progress indicator
-        self.generation_stats_label = QLabel("🎨 Generated: 0/0 Cards (0%)")
-        self.generation_stats_label.setStyleSheet(
-            """
-            QLabel {
-                font-weight: bold;
-                font-size: 14px;
-                padding: 8px;
-                background-color: #3a3a3a;
-                border: 1px solid #555;
-                border-radius: 4px;
-                color: #4ec9b0;
-            }
-        """
-        )
-        stats_layout.addWidget(self.generation_stats_label)
-
-        stats_layout.addStretch()
-        layout.addLayout(stats_layout)
-
-        # Card type statistics (separate line)
-        type_stats_layout = QHBoxLayout()
-
-        # Card type stats label
-        self.type_stats_label = QLabel(
-            "📊 Total: 0 | Lands: 0 | Creatures: 0 | Instants: 0 | Sorceries: 0"
-        )
-        self.type_stats_label.setStyleSheet("padding: 5px; color: #888;")
-        type_stats_layout.addWidget(self.type_stats_label)
-
-        type_stats_layout.addStretch()
-        layout.addLayout(type_stats_layout)
+        # Statistics are now handled by the DeckStatsPanel widget added above
 
         # Model/Style Settings Group (toggleable via Config button)
         self.gen_settings_group = QGroupBox("⚙️ Model & Style Settings")
@@ -1014,69 +468,50 @@ class CardManagementTab(QWidget):
         self.gen_settings_group.setLayout(gen_settings_layout)
         layout.addWidget(self.gen_settings_group)
 
-        # Generation control buttons (conditionally visible)
-        gen_controls_widget = QWidget()
-        gen_controls = QHBoxLayout(gen_controls_widget)
-        gen_controls.setContentsMargins(0, 5, 0, 5)
+        # Create custom image button row (always visible)
+        custom_controls_widget = QWidget()
+        custom_controls = QHBoxLayout(custom_controls_widget)
+        custom_controls.setContentsMargins(0, 5, 0, 5)
 
-        # Custom image button (always visible, leftmost position)
+        # Custom image button (always visible)
         self.use_custom_image_btn = QPushButton("📷 Use Custom Image")
         self.use_custom_image_btn.setToolTip("Select your own image as artwork")
         self.use_custom_image_btn.clicked.connect(self.use_custom_image_for_selected)
-        gen_controls.addWidget(self.use_custom_image_btn)
+        custom_controls.addWidget(self.use_custom_image_btn)
+        custom_controls.addStretch()
+        layout.addWidget(custom_controls_widget)
 
-        # Generate Selected button (initially hidden - shown only for non-generated cards)
-        self.generate_selected_btn = QPushButton("🎯 Generate Selected")
-        self.generate_selected_btn.clicked.connect(self.generate_selected_cards)
-        self.generate_selected_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.generate_selected_btn)
+        # Create batch operations widget
+        self.batch_operations = BatchOperationsWidget()
+        self._connect_batch_operations_signals()
+        layout.addWidget(self.batch_operations)
 
-        # Regeneration buttons (initially hidden)
-        self.regen_with_image_btn = QPushButton("🖼️ Regenerate with New Image")
-        self.regen_with_image_btn.setToolTip(
-            "Regenerate selected card with new artwork"
-        )
-        self.regen_with_image_btn.clicked.connect(self.regenerate_selected_with_image)
-        self.regen_with_image_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.regen_with_image_btn)
+        # Get references to individual buttons for backward compatibility
+        self.generate_selected_btn = self.batch_operations.generate_selected_btn
+        self.regen_with_image_btn = self.batch_operations.regen_with_image_btn
+        self.regen_card_only_btn = self.batch_operations.regen_card_only_btn
+        self.delete_files_btn = self.batch_operations.delete_files_btn
+        self.regen_all_cards_only_btn = self.batch_operations.regen_all_cards_only_btn
 
-        self.regen_card_only_btn = QPushButton("🃏 Regenerate Card Only")
-        self.regen_card_only_btn.setToolTip("Regenerate card using existing artwork")
-        self.regen_card_only_btn.clicked.connect(self.regenerate_selected_card_only)
-        self.regen_card_only_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.regen_card_only_btn)
+        # Batch operations buttons are now handled by BatchOperationsWidget
+        # The widget connections are made in _connect_batch_operations_signals()
 
-        # Delete files button (initially hidden)
-        self.delete_files_btn = QPushButton("🗑️ Delete Files")
-        self.delete_files_btn.setToolTip("Delete generated files for selected cards")
-        self.delete_files_btn.clicked.connect(self.delete_selected_files)
-        self.delete_files_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.delete_files_btn)
+        # Sync Status button (separate from batch operations)
+        sync_controls = QHBoxLayout()
+        sync_controls_widget = QWidget()
+        sync_controls_widget.setLayout(sync_controls)
 
-        gen_controls.addStretch()
-
-        # Sync Status button
         self.sync_status_btn = QPushButton("🔄 Sync Status")
         self.sync_status_btn.setToolTip(
             "Reset and synchronize card status with actual rendered files"
         )
         self.sync_status_btn.clicked.connect(self.manual_sync_status)
         self.sync_status_btn.setStyleSheet("QPushButton { background-color: #4a5568; }")
-        gen_controls.addWidget(self.sync_status_btn)
+        sync_controls.addWidget(self.sync_status_btn)
+        sync_controls.addStretch()
 
-        # Regenerate All Cards Only button (always visible on the right)
-        self.regen_all_cards_only_btn = QPushButton("♻️ Regenerate All Cards Only")
-        self.regen_all_cards_only_btn.setToolTip(
-            "Regenerate all cards keeping existing images where available"
-        )
-        self.regen_all_cards_only_btn.clicked.connect(self.regenerate_all_cards_only)
-        self.regen_all_cards_only_btn.setStyleSheet(
-            "QPushButton { background-color: #5c4528; }"
-        )
-        gen_controls.addWidget(self.regen_all_cards_only_btn)
-
-        # Add control buttons to main layout (always visible)
-        layout.addWidget(gen_controls_widget)
+        # Add sync status button to main layout
+        layout.addWidget(sync_controls_widget)
 
         # Create a scroll area for the entire content
         from PyQt6.QtGui import QKeySequence, QShortcut
@@ -1103,18 +538,61 @@ class CardManagementTab(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         self.setLayout(main_layout)
 
+    def _connect_toolbar_signals(self):
+        """Connect toolbar signals to their respective handler methods."""
+        # File operation signals
+        self.toolbar.load_deck_requested.connect(self.load_deck)
+        self.toolbar.reload_deck_requested.connect(self.reload_current_deck)
+
+        # Import/Export signals
+        self.toolbar.import_csv_requested.connect(self.import_csv)
+        self.toolbar.export_csv_requested.connect(self.export_csv)
+
+        # Generation signals
+        self.toolbar.generate_all_requested.connect(self.generate_all_cards)
+
+        # Configuration signals
+        self.toolbar.toggle_config_requested.connect(self.toggle_generation_settings)
+
+    def _connect_filter_bar_signals(self):
+        """Connect filter bar signals to their respective handler methods."""
+        # Filter change signals are handled internally by the filter bar
+        # and passed to the table manager via set_filter_components
+        # The signals can also be used for additional functionality if needed
+
+    def _connect_batch_operations_signals(self):
+        """Connect batch operations widget signals to their respective handler methods."""
+        # Connect batch operation signals
+        self.batch_operations.generate_selected_requested.connect(
+            self.generate_selected_cards
+        )
+        self.batch_operations.regenerate_selected_with_image_requested.connect(
+            self.regenerate_selected_with_image
+        )
+        self.batch_operations.regenerate_selected_card_only_requested.connect(
+            self.regenerate_selected_card_only
+        )
+        self.batch_operations.delete_selected_files_requested.connect(
+            self.delete_selected_files
+        )
+        self.batch_operations.regenerate_all_cards_only_requested.connect(
+            self.regenerate_all_cards_only
+        )
+
+        # Optional: Connect to filter change signals for logging or other features
+        # self.filter_bar.type_filter_changed.connect(self._on_type_filter_changed)
+        # self.filter_bar.status_filter_changed.connect(self._on_status_filter_changed)
+        # self.filter_bar.search_text_changed.connect(self._on_search_text_changed)
+        # self.filter_bar.reset_filters_requested.connect(self._on_reset_filters_requested)
+
     def _setup_table_manager(self):
         """Initialize and configure the table manager."""
         # Create the table manager
         self.table_manager = CardTableManager(self.table, self.cards)
 
-        # Connect filter components to the manager
-        self.table_manager.set_filter_components(
-            self.filter_combo,
-            self.status_filter_combo,
-            self.search_input,
-            self.filter_result_label,
-        )
+        # Get filter components from the filter bar and connect to the manager
+        filter_components = self.filter_bar.get_filter_components()
+        self.table_manager.set_filter_components(*filter_components)
 
         # Connect table manager signals
         self.table_manager.item_changed.connect(self._on_table_manager_item_changed)
@@ -1192,11 +670,7 @@ class CardManagementTab(QWidget):
             selected_row = selected_items[0].row()
 
         # Disable auto-save temporarily to prevent overwriting
-        old_auto_save = self.auto_save_label.text()
-        self.auto_save_label.setText(" Auto-Save: Paused")
-        self.auto_save_label.setStyleSheet(
-            "color: #ff9800; font-weight: bold; padding: 5px;"
-        )
+        self.toolbar.set_auto_save_status(False)
 
         # Load the deck file using file operations
         cards = self.file_operations.reload_current_deck()
@@ -1228,14 +702,7 @@ class CardManagementTab(QWidget):
         # Re-enable auto-save after a short delay
         from PyQt6.QtCore import QTimer
 
-        QTimer.singleShot(1000, lambda: self._restore_auto_save(old_auto_save))
-
-    def _restore_auto_save(self, old_text):
-        """Restore auto-save indicator after reload"""
-        self.auto_save_label.setText(old_text)
-        self.auto_save_label.setStyleSheet(
-            "color: #4ec9b0; font-weight: bold; padding: 5px;"
-        )
+        QTimer.singleShot(1000, lambda: self.toolbar.set_auto_save_status(True))
 
     def load_deck_file(self, filename=None):
         """Load a deck from a YAML file"""
@@ -1478,11 +945,8 @@ class CardManagementTab(QWidget):
         is_visible = self.gen_settings_group.isVisible()
         self.gen_settings_group.setVisible(not is_visible)
 
-        # Update button text to show state
-        if not is_visible:
-            self.config_button.setText("⚙️ Config ▼")
-        else:
-            self.config_button.setText("⚙️ Config ▲")
+        # Update toolbar button state
+        self.toolbar.update_config_button_state(not is_visible)
 
     def import_csv(self):
         """Import deck from CSV file"""
