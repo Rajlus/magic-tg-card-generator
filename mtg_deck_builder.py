@@ -3208,6 +3208,9 @@ class MTGDeckBuilder(QMainWindow):
         for item in self.cards_tab.queue_table.selectedItems():
             selected_rows.add(item.row())
 
+        # Update button visibility based on new selection
+        self.update_button_visibility()
+
         if selected_rows:
             row = min(selected_rows)  # Get first selected row
 
