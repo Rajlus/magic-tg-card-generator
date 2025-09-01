@@ -80,6 +80,12 @@ from src.managers.card_validation_manager import CardValidationManager
 
 # Import UI components
 from src.ui.tabs import ThemeConfigTab
+from src.ui.widgets import (
+    BatchOperationsWidget,
+    CardFilterBar,
+    CardToolbar,
+    DeckStatsPanel,
+)
 
 # Export for backward compatibility
 __all__ = ["MTGCard", "make_safe_filename", "escape_for_shell", "convert_mana_cost"]
@@ -310,105 +316,15 @@ class CardManagementTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Toolbar
-        toolbar = QHBoxLayout()
-        self.load_button = QPushButton(" Load Deck")
-        self.reload_button = QPushButton("🔄 Reload (F5)")
-        self.reload_button.setToolTip("Reload current deck from file (F5)")
-        self.reload_button.setStyleSheet(
-            "QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 5px; }"
-        )
+        # Create toolbar widget
+        self.toolbar = CardToolbar()
+        self._connect_toolbar_signals()
+        layout.addWidget(self.toolbar)
 
-        # CSV Import/Export buttons
-        self.csv_import_button = QPushButton("📥 Import CSV")
-        self.csv_import_button.setToolTip("Import deck from CSV file")
-        self.csv_export_button = QPushButton("📤 Export CSV")
-        self.csv_export_button.setToolTip("Export deck to CSV file")
-
-        self.config_button = QPushButton("⚙️ Config")
-        self.config_button.clicked.connect(self.toggle_generation_settings)
-
-        # Auto-save indicator
-        self.auto_save_label = QLabel(" Auto-Save: Active")
-        self.auto_save_label.setStyleSheet(
-            "color: #4ec9b0; font-weight: bold; padding: 5px;"
-        )
-
-        self.load_button.clicked.connect(self.load_deck)
-        self.reload_button.clicked.connect(self.reload_current_deck)
-        self.csv_import_button.clicked.connect(self.import_csv)
-        self.csv_export_button.clicked.connect(self.export_csv)
-
-        toolbar.addWidget(self.load_button)
-        toolbar.addWidget(self.reload_button)
-        toolbar.addWidget(self.auto_save_label)
-        toolbar.addWidget(self.csv_import_button)
-        toolbar.addWidget(self.csv_export_button)
-        toolbar.addStretch()
-
-        # Generate All Pending button (moved from generation controls)
-        self.generate_all_btn = QPushButton("🚀 Generate All")
-        self.generate_all_btn.setStyleSheet(
-            "QPushButton { font-weight: bold; padding: 6px; background-color: #4CAF50; }"
-        )
-        self.generate_all_btn.setToolTip("Generate all pending cards")
-        self.generate_all_btn.clicked.connect(self.generate_all_cards)
-        toolbar.addWidget(self.generate_all_btn)
-
-        toolbar.addWidget(self.config_button)
-        layout.addLayout(toolbar)
-
-        # Filter and search
-        filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Type:"))
-        self.filter_combo = QComboBox()
-        self.filter_combo.addItems(
-            [
-                "All",
-                "Creatures",
-                "Lands",
-                "Instants",
-                "Sorceries",
-                "Artifacts",
-                "Enchantments",
-            ]
-        )
-        # Filter connections now handled by table manager
-        filter_layout.addWidget(self.filter_combo)
-
-        # Add status filter
-        filter_layout.addWidget(QLabel("Status:"))
-        self.status_filter_combo = QComboBox()
-        self.status_filter_combo.addItems(
-            ["All", "✅ Completed", "⏸️ Pending", "❌ Failed", "🔄 Generating"]
-        )
-        # Status filter connections now handled by table manager
-        filter_layout.addWidget(self.status_filter_combo)
-
-        filter_layout.addWidget(QLabel("Search:"))
-        self.search_input = QLineEdit()
-        # Search filter connections now handled by table manager
-        filter_layout.addWidget(self.search_input)
-
-        # Add filter result label
-        self.filter_result_label = QLabel("")
-        self.filter_result_label.setStyleSheet(
-            """
-            QLabel {
-                font-weight: bold;
-                color: #ff9800;
-                padding: 5px;
-                background-color: #3a3a3a;
-                border: 1px solid #555;
-                border-radius: 3px;
-            }
-        """
-        )
-        self.filter_result_label.setVisible(False)  # Hidden initially
-        filter_layout.addWidget(self.filter_result_label)
-
-        filter_layout.addStretch()
-        layout.addLayout(filter_layout)
+        # Create filter bar widget
+        self.filter_bar = CardFilterBar()
+        self._connect_filter_bar_signals()
+        layout.addWidget(self.filter_bar)
 
         # Table
         self.table = QTableWidget()
@@ -473,13 +389,14 @@ class CardManagementTab(QWidget):
 
         layout.addWidget(self.table)
 
-        # Color Distribution only (stats moved to generation settings)
-        self.color_label = QLabel(" Colors: -")
-        self.color_label.setWordWrap(True)
-        self.color_label.setStyleSheet(
-            "font-weight: bold; color: #ce9178; padding: 5px;"
-        )
-        layout.addWidget(self.color_label)
+        # Create deck statistics panel widget
+        self.stats_panel = DeckStatsPanel()
+        layout.addWidget(self.stats_panel)
+
+        # Get references to individual labels for backward compatibility
+        self.generation_stats_label = self.stats_panel.get_generation_label()
+        self.type_stats_label = self.stats_panel.get_type_label()
+        self.color_label = self.stats_panel.get_color_label()
 
         # Edit buttons with Add/Delete functionality
         edit_layout = QHBoxLayout()
@@ -523,41 +440,7 @@ class CardManagementTab(QWidget):
         separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator)
 
-        # Stats and Progress (always visible)
-        stats_layout = QHBoxLayout()
-
-        # Generation progress indicator
-        self.generation_stats_label = QLabel("🎨 Generated: 0/0 Cards (0%)")
-        self.generation_stats_label.setStyleSheet(
-            """
-            QLabel {
-                font-weight: bold;
-                font-size: 14px;
-                padding: 8px;
-                background-color: #3a3a3a;
-                border: 1px solid #555;
-                border-radius: 4px;
-                color: #4ec9b0;
-            }
-        """
-        )
-        stats_layout.addWidget(self.generation_stats_label)
-
-        stats_layout.addStretch()
-        layout.addLayout(stats_layout)
-
-        # Card type statistics (separate line)
-        type_stats_layout = QHBoxLayout()
-
-        # Card type stats label
-        self.type_stats_label = QLabel(
-            "📊 Total: 0 | Lands: 0 | Creatures: 0 | Instants: 0 | Sorceries: 0"
-        )
-        self.type_stats_label.setStyleSheet("padding: 5px; color: #888;")
-        type_stats_layout.addWidget(self.type_stats_label)
-
-        type_stats_layout.addStretch()
-        layout.addLayout(type_stats_layout)
+        # Statistics are now handled by the DeckStatsPanel widget added above
 
         # Model/Style Settings Group (toggleable via Config button)
         self.gen_settings_group = QGroupBox("⚙️ Model & Style Settings")
@@ -585,69 +468,50 @@ class CardManagementTab(QWidget):
         self.gen_settings_group.setLayout(gen_settings_layout)
         layout.addWidget(self.gen_settings_group)
 
-        # Generation control buttons (conditionally visible)
-        gen_controls_widget = QWidget()
-        gen_controls = QHBoxLayout(gen_controls_widget)
-        gen_controls.setContentsMargins(0, 5, 0, 5)
+        # Create custom image button row (always visible)
+        custom_controls_widget = QWidget()
+        custom_controls = QHBoxLayout(custom_controls_widget)
+        custom_controls.setContentsMargins(0, 5, 0, 5)
 
-        # Custom image button (always visible, leftmost position)
+        # Custom image button (always visible)
         self.use_custom_image_btn = QPushButton("📷 Use Custom Image")
         self.use_custom_image_btn.setToolTip("Select your own image as artwork")
         self.use_custom_image_btn.clicked.connect(self.use_custom_image_for_selected)
-        gen_controls.addWidget(self.use_custom_image_btn)
+        custom_controls.addWidget(self.use_custom_image_btn)
+        custom_controls.addStretch()
+        layout.addWidget(custom_controls_widget)
 
-        # Generate Selected button (initially hidden - shown only for non-generated cards)
-        self.generate_selected_btn = QPushButton("🎯 Generate Selected")
-        self.generate_selected_btn.clicked.connect(self.generate_selected_cards)
-        self.generate_selected_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.generate_selected_btn)
+        # Create batch operations widget
+        self.batch_operations = BatchOperationsWidget()
+        self._connect_batch_operations_signals()
+        layout.addWidget(self.batch_operations)
 
-        # Regeneration buttons (initially hidden)
-        self.regen_with_image_btn = QPushButton("🖼️ Regenerate with New Image")
-        self.regen_with_image_btn.setToolTip(
-            "Regenerate selected card with new artwork"
-        )
-        self.regen_with_image_btn.clicked.connect(self.regenerate_selected_with_image)
-        self.regen_with_image_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.regen_with_image_btn)
+        # Get references to individual buttons for backward compatibility
+        self.generate_selected_btn = self.batch_operations.generate_selected_btn
+        self.regen_with_image_btn = self.batch_operations.regen_with_image_btn
+        self.regen_card_only_btn = self.batch_operations.regen_card_only_btn
+        self.delete_files_btn = self.batch_operations.delete_files_btn
+        self.regen_all_cards_only_btn = self.batch_operations.regen_all_cards_only_btn
 
-        self.regen_card_only_btn = QPushButton("🃏 Regenerate Card Only")
-        self.regen_card_only_btn.setToolTip("Regenerate card using existing artwork")
-        self.regen_card_only_btn.clicked.connect(self.regenerate_selected_card_only)
-        self.regen_card_only_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.regen_card_only_btn)
+        # Batch operations buttons are now handled by BatchOperationsWidget
+        # The widget connections are made in _connect_batch_operations_signals()
 
-        # Delete files button (initially hidden)
-        self.delete_files_btn = QPushButton("🗑️ Delete Files")
-        self.delete_files_btn.setToolTip("Delete generated files for selected cards")
-        self.delete_files_btn.clicked.connect(self.delete_selected_files)
-        self.delete_files_btn.setVisible(False)  # Initially hidden
-        gen_controls.addWidget(self.delete_files_btn)
+        # Sync Status button (separate from batch operations)
+        sync_controls = QHBoxLayout()
+        sync_controls_widget = QWidget()
+        sync_controls_widget.setLayout(sync_controls)
 
-        gen_controls.addStretch()
-
-        # Sync Status button
         self.sync_status_btn = QPushButton("🔄 Sync Status")
         self.sync_status_btn.setToolTip(
             "Reset and synchronize card status with actual rendered files"
         )
         self.sync_status_btn.clicked.connect(self.manual_sync_status)
         self.sync_status_btn.setStyleSheet("QPushButton { background-color: #4a5568; }")
-        gen_controls.addWidget(self.sync_status_btn)
+        sync_controls.addWidget(self.sync_status_btn)
+        sync_controls.addStretch()
 
-        # Regenerate All Cards Only button (always visible on the right)
-        self.regen_all_cards_only_btn = QPushButton("♻️ Regenerate All Cards Only")
-        self.regen_all_cards_only_btn.setToolTip(
-            "Regenerate all cards keeping existing images where available"
-        )
-        self.regen_all_cards_only_btn.clicked.connect(self.regenerate_all_cards_only)
-        self.regen_all_cards_only_btn.setStyleSheet(
-            "QPushButton { background-color: #5c4528; }"
-        )
-        gen_controls.addWidget(self.regen_all_cards_only_btn)
-
-        # Add control buttons to main layout (always visible)
-        layout.addWidget(gen_controls_widget)
+        # Add sync status button to main layout
+        layout.addWidget(sync_controls_widget)
 
         # Create a scroll area for the entire content
         from PyQt6.QtGui import QKeySequence, QShortcut
@@ -674,18 +538,61 @@ class CardManagementTab(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         self.setLayout(main_layout)
 
+    def _connect_toolbar_signals(self):
+        """Connect toolbar signals to their respective handler methods."""
+        # File operation signals
+        self.toolbar.load_deck_requested.connect(self.load_deck)
+        self.toolbar.reload_deck_requested.connect(self.reload_current_deck)
+
+        # Import/Export signals
+        self.toolbar.import_csv_requested.connect(self.import_csv)
+        self.toolbar.export_csv_requested.connect(self.export_csv)
+
+        # Generation signals
+        self.toolbar.generate_all_requested.connect(self.generate_all_cards)
+
+        # Configuration signals
+        self.toolbar.toggle_config_requested.connect(self.toggle_generation_settings)
+
+    def _connect_filter_bar_signals(self):
+        """Connect filter bar signals to their respective handler methods."""
+        # Filter change signals are handled internally by the filter bar
+        # and passed to the table manager via set_filter_components
+        # The signals can also be used for additional functionality if needed
+
+    def _connect_batch_operations_signals(self):
+        """Connect batch operations widget signals to their respective handler methods."""
+        # Connect batch operation signals
+        self.batch_operations.generate_selected_requested.connect(
+            self.generate_selected_cards
+        )
+        self.batch_operations.regenerate_selected_with_image_requested.connect(
+            self.regenerate_selected_with_image
+        )
+        self.batch_operations.regenerate_selected_card_only_requested.connect(
+            self.regenerate_selected_card_only
+        )
+        self.batch_operations.delete_selected_files_requested.connect(
+            self.delete_selected_files
+        )
+        self.batch_operations.regenerate_all_cards_only_requested.connect(
+            self.regenerate_all_cards_only
+        )
+
+        # Optional: Connect to filter change signals for logging or other features
+        # self.filter_bar.type_filter_changed.connect(self._on_type_filter_changed)
+        # self.filter_bar.status_filter_changed.connect(self._on_status_filter_changed)
+        # self.filter_bar.search_text_changed.connect(self._on_search_text_changed)
+        # self.filter_bar.reset_filters_requested.connect(self._on_reset_filters_requested)
+
     def _setup_table_manager(self):
         """Initialize and configure the table manager."""
         # Create the table manager
         self.table_manager = CardTableManager(self.table, self.cards)
 
-        # Connect filter components to the manager
-        self.table_manager.set_filter_components(
-            self.filter_combo,
-            self.status_filter_combo,
-            self.search_input,
-            self.filter_result_label,
-        )
+        # Get filter components from the filter bar and connect to the manager
+        filter_components = self.filter_bar.get_filter_components()
+        self.table_manager.set_filter_components(*filter_components)
 
         # Connect table manager signals
         self.table_manager.item_changed.connect(self._on_table_manager_item_changed)
@@ -763,11 +670,7 @@ class CardManagementTab(QWidget):
             selected_row = selected_items[0].row()
 
         # Disable auto-save temporarily to prevent overwriting
-        old_auto_save = self.auto_save_label.text()
-        self.auto_save_label.setText(" Auto-Save: Paused")
-        self.auto_save_label.setStyleSheet(
-            "color: #ff9800; font-weight: bold; padding: 5px;"
-        )
+        self.toolbar.set_auto_save_status(False)
 
         # Load the deck file using file operations
         cards = self.file_operations.reload_current_deck()
@@ -799,14 +702,7 @@ class CardManagementTab(QWidget):
         # Re-enable auto-save after a short delay
         from PyQt6.QtCore import QTimer
 
-        QTimer.singleShot(1000, lambda: self._restore_auto_save(old_auto_save))
-
-    def _restore_auto_save(self, old_text):
-        """Restore auto-save indicator after reload"""
-        self.auto_save_label.setText(old_text)
-        self.auto_save_label.setStyleSheet(
-            "color: #4ec9b0; font-weight: bold; padding: 5px;"
-        )
+        QTimer.singleShot(1000, lambda: self.toolbar.set_auto_save_status(True))
 
     def load_deck_file(self, filename=None):
         """Load a deck from a YAML file"""
@@ -1049,11 +945,8 @@ class CardManagementTab(QWidget):
         is_visible = self.gen_settings_group.isVisible()
         self.gen_settings_group.setVisible(not is_visible)
 
-        # Update button text to show state
-        if not is_visible:
-            self.config_button.setText("⚙️ Config ▼")
-        else:
-            self.config_button.setText("⚙️ Config ▲")
+        # Update toolbar button state
+        self.toolbar.update_config_button_state(not is_visible)
 
     def import_csv(self):
         """Import deck from CSV file"""
