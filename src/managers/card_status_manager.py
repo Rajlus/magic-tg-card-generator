@@ -463,6 +463,21 @@ class CardStatusManager(QObject):
         # Get statistics
         stats = self.get_status_statistics()
 
+        # Debug logging to track the count issue
+        if self.logger:
+            self.logger.log_message(
+                "DEBUG",
+                f"Generation Stats Debug - Total cards: {len(self.cards)}, "
+                f"Completed: {stats['completed']}, Pending: {stats['pending']}, "
+                f"Failed: {stats['failed']}, Generating: {stats['generating']}",
+            )
+            # Log individual card statuses
+            for i, card in enumerate(self.cards):
+                status = getattr(card, "status", self.STATUS_PENDING)
+                self.logger.log_message(
+                    "DEBUG", f"  Card {i}: {card.name} - Status: {status}"
+                )
+
         # Update label if available
         if self.generation_stats_label:
             total = stats["total"]

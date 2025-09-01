@@ -1,14 +1,14 @@
 """Domain-specific pytest fixtures for comprehensive testing."""
 
-import pytest
 from datetime import datetime
-from typing import List, Dict, Tuple
 
+# typing imports removed - using built-in types
+import pytest
 from magic_tg_card_generator.models import Card, CardType, Color
 
 
 @pytest.fixture
-def sample_creature_cards() -> List[Card]:
+def sample_creature_cards() -> list[Card]:
     """Provide a collection of sample creature cards for testing."""
     return [
         Card(
@@ -20,7 +20,7 @@ def sample_creature_cards() -> List[Card]:
             toughness=4,
             text="Flying, haste",
             flavor_text="A dragon's roar splits the sky.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Serra Angel",
@@ -30,7 +30,7 @@ def sample_creature_cards() -> List[Card]:
             power=4,
             toughness=4,
             text="Flying, vigilance",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Llanowar Elves",
@@ -40,7 +40,7 @@ def sample_creature_cards() -> List[Card]:
             power=1,
             toughness=1,
             text="T: Add G.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Vampire Nighthawk",
@@ -50,7 +50,7 @@ def sample_creature_cards() -> List[Card]:
             power=2,
             toughness=3,
             text="Flying, deathtouch, lifelink",
-            rarity="Uncommon"
+            rarity="Uncommon",
         ),
         Card(
             name="Delver of Secrets",
@@ -60,13 +60,13 @@ def sample_creature_cards() -> List[Card]:
             power=1,
             toughness=1,
             text="At the beginning of your upkeep, look at the top card of your library.",
-            rarity="Common"
-        )
+            rarity="Common",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_spell_cards() -> List[Card]:
+def sample_spell_cards() -> list[Card]:
     """Provide a collection of sample non-creature spell cards for testing."""
     return [
         Card(
@@ -76,7 +76,7 @@ def sample_spell_cards() -> List[Card]:
             color=Color.RED,
             text="Deal 3 damage to any target.",
             flavor_text="The spark of the idea was brilliant.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Counterspell",
@@ -84,7 +84,7 @@ def sample_spell_cards() -> List[Card]:
             mana_cost="UU",
             color=Color.BLUE,
             text="Counter target spell.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Wrath of God",
@@ -92,7 +92,7 @@ def sample_spell_cards() -> List[Card]:
             mana_cost="2WW",
             color=Color.WHITE,
             text="Destroy all creatures. They can't be regenerated.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Dark Ritual",
@@ -100,7 +100,7 @@ def sample_spell_cards() -> List[Card]:
             mana_cost="B",
             color=Color.BLACK,
             text="Add BBB.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Giant Growth",
@@ -108,13 +108,13 @@ def sample_spell_cards() -> List[Card]:
             mana_cost="G",
             color=Color.GREEN,
             text="Target creature gets +3/+3 until end of turn.",
-            rarity="Common"
-        )
+            rarity="Common",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_multicolor_cards() -> List[Card]:
+def sample_multicolor_cards() -> list[Card]:
     """Provide a collection of sample multicolor cards for testing."""
     return [
         Card(
@@ -123,7 +123,7 @@ def sample_multicolor_cards() -> List[Card]:
             mana_cost="RW",
             color=Color.MULTICOLOR,
             text="Deal 3 damage to any target. You gain 3 life.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         ),
         Card(
             name="Terminate",
@@ -131,7 +131,7 @@ def sample_multicolor_cards() -> List[Card]:
             mana_cost="BR",
             color=Color.MULTICOLOR,
             text="Destroy target creature. It can't be regenerated.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Mystic Snake",
@@ -141,7 +141,7 @@ def sample_multicolor_cards() -> List[Card]:
             power=2,
             toughness=2,
             text="Flash. When Mystic Snake enters the battlefield, counter target spell.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Lightning Angel",
@@ -151,7 +151,7 @@ def sample_multicolor_cards() -> List[Card]:
             power=3,
             toughness=4,
             text="Flying, vigilance, haste",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Child of Alara",
@@ -161,13 +161,13 @@ def sample_multicolor_cards() -> List[Card]:
             power=6,
             toughness=6,
             text="When Child of Alara dies, destroy all nonland permanents.",
-            rarity="Mythic"
-        )
+            rarity="Mythic",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_colorless_cards() -> List[Card]:
+def sample_colorless_cards() -> list[Card]:
     """Provide a collection of sample colorless cards for testing."""
     return [
         Card(
@@ -176,7 +176,7 @@ def sample_colorless_cards() -> List[Card]:
             mana_cost="1",
             color=Color.COLORLESS,
             text="T: Add CC.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         ),
         Card(
             name="Black Lotus",
@@ -184,7 +184,7 @@ def sample_colorless_cards() -> List[Card]:
             mana_cost="0",
             color=Color.COLORLESS,
             text="T, Sacrifice Black Lotus: Add three mana of any one color.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Ornithopter",
@@ -194,7 +194,7 @@ def sample_colorless_cards() -> List[Card]:
             power=0,
             toughness=2,
             text="Flying",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Mana Crypt",
@@ -202,7 +202,7 @@ def sample_colorless_cards() -> List[Card]:
             mana_cost="0",
             color=Color.COLORLESS,
             text="At the beginning of your upkeep, flip a coin.",
-            rarity="Mythic"
+            rarity="Mythic",
         ),
         Card(
             name="Eldrazi Temple",
@@ -210,13 +210,13 @@ def sample_colorless_cards() -> List[Card]:
             mana_cost="",
             color=Color.COLORLESS,
             text="T: Add C. T: Add CC. Spend this mana only to cast colorless spells.",
-            rarity="Rare"
-        )
+            rarity="Rare",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_x_cost_cards() -> List[Card]:
+def sample_x_cost_cards() -> list[Card]:
     """Provide a collection of sample X-cost cards for testing."""
     return [
         Card(
@@ -225,7 +225,7 @@ def sample_x_cost_cards() -> List[Card]:
             mana_cost="XR",
             color=Color.RED,
             text="Deal X damage divided as you choose among any number of targets.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Braingeyser",
@@ -233,7 +233,7 @@ def sample_x_cost_cards() -> List[Card]:
             mana_cost="XUU",
             color=Color.BLUE,
             text="Target player draws X cards.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         ),
         Card(
             name="Stroke of Genius",
@@ -241,7 +241,7 @@ def sample_x_cost_cards() -> List[Card]:
             mana_cost="X2U",
             color=Color.BLUE,
             text="Target player draws X cards.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Hydra Broodmaster",
@@ -251,7 +251,7 @@ def sample_x_cost_cards() -> List[Card]:
             power=7,
             toughness=7,
             text="XXG: Monstrosity X. When Hydra Broodmaster becomes monstrous, create X X/X green Hydra creature tokens.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Villainous Wealth",
@@ -259,13 +259,13 @@ def sample_x_cost_cards() -> List[Card]:
             mana_cost="XBUG",
             color=Color.MULTICOLOR,
             text="Target opponent exiles the top X cards of their library.",
-            rarity="Rare"
-        )
+            rarity="Rare",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_land_cards() -> List[Card]:
+def sample_land_cards() -> list[Card]:
     """Provide a collection of sample land cards for testing."""
     return [
         Card(
@@ -274,7 +274,7 @@ def sample_land_cards() -> List[Card]:
             mana_cost="",
             color=Color.GREEN,
             text="T: Add G.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Mountain",
@@ -282,7 +282,7 @@ def sample_land_cards() -> List[Card]:
             mana_cost="",
             color=Color.RED,
             text="T: Add R.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Underground Sea",
@@ -290,7 +290,7 @@ def sample_land_cards() -> List[Card]:
             mana_cost="",
             color=Color.MULTICOLOR,
             text="T: Add U or B.",
-            rarity="Rare"
+            rarity="Rare",
         ),
         Card(
             name="Command Tower",
@@ -298,7 +298,7 @@ def sample_land_cards() -> List[Card]:
             mana_cost="",
             color=Color.COLORLESS,
             text="T: Add one mana of any color in your commander's color identity.",
-            rarity="Common"
+            rarity="Common",
         ),
         Card(
             name="Wasteland",
@@ -306,13 +306,13 @@ def sample_land_cards() -> List[Card]:
             mana_cost="",
             color=Color.COLORLESS,
             text="T: Add C. T, Sacrifice Wasteland: Destroy target nonbasic land.",
-            rarity="Uncommon"
-        )
+            rarity="Uncommon",
+        ),
     ]
 
 
 @pytest.fixture
-def sample_planeswalker_cards() -> List[Card]:
+def sample_planeswalker_cards() -> list[Card]:
     """Provide a collection of sample planeswalker cards for testing."""
     return [
         Card(
@@ -321,7 +321,7 @@ def sample_planeswalker_cards() -> List[Card]:
             mana_cost="2UU",
             color=Color.BLUE,
             text="+2: Look at the top card of target player's library.",
-            rarity="Mythic"
+            rarity="Mythic",
         ),
         Card(
             name="Elspeth, Knight-Errant",
@@ -329,7 +329,7 @@ def sample_planeswalker_cards() -> List[Card]:
             mana_cost="2WW",
             color=Color.WHITE,
             text="+1: Create a 1/1 white Soldier creature token.",
-            rarity="Mythic"
+            rarity="Mythic",
         ),
         Card(
             name="Nicol Bolas, Planeswalker",
@@ -337,7 +337,7 @@ def sample_planeswalker_cards() -> List[Card]:
             mana_cost="4UBBR",
             color=Color.MULTICOLOR,
             text="+3: Destroy target noncreature permanent.",
-            rarity="Mythic"
+            rarity="Mythic",
         ),
         Card(
             name="Karn Liberated",
@@ -345,7 +345,7 @@ def sample_planeswalker_cards() -> List[Card]:
             mana_cost="7",
             color=Color.COLORLESS,
             text="+4: Target player exiles a card from their hand.",
-            rarity="Mythic"
+            rarity="Mythic",
         ),
         Card(
             name="Chandra, Torch of Defiance",
@@ -353,19 +353,18 @@ def sample_planeswalker_cards() -> List[Card]:
             mana_cost="2RR",
             color=Color.RED,
             text="+1: Exile the top card of your library.",
-            rarity="Mythic"
-        )
+            rarity="Mythic",
+        ),
     ]
 
 
 @pytest.fixture
-def mana_cost_test_cases() -> List[Tuple[str, int]]:
+def mana_cost_test_cases() -> list[tuple[str, int]]:
     """Provide comprehensive mana cost test cases with expected CMC values."""
     return [
         # Empty and zero costs
         ("", 0),
         ("0", 0),
-        
         # Simple generic costs
         ("1", 1),
         ("2", 2),
@@ -373,7 +372,6 @@ def mana_cost_test_cases() -> List[Tuple[str, int]]:
         ("10", 10),
         ("15", 15),
         ("20", 20),
-        
         # Single colored mana
         ("W", 1),
         ("U", 1),
@@ -381,7 +379,6 @@ def mana_cost_test_cases() -> List[Tuple[str, int]]:
         ("R", 1),
         ("G", 1),
         ("C", 1),
-        
         # Multiple colored mana
         ("WW", 2),
         ("UU", 2),
@@ -389,7 +386,6 @@ def mana_cost_test_cases() -> List[Tuple[str, int]]:
         ("RRR", 3),
         ("GGGGG", 5),
         ("WUBRG", 5),
-        
         # Mixed costs
         ("1W", 2),
         ("2U", 3),
@@ -398,7 +394,6 @@ def mana_cost_test_cases() -> List[Tuple[str, int]]:
         ("3UU", 5),
         ("1WUBRG", 6),
         ("10WUBRG", 15),
-        
         # X costs
         ("X", 0),
         ("XW", 1),
@@ -407,20 +402,19 @@ def mana_cost_test_cases() -> List[Tuple[str, int]]:
         ("XX", 0),
         ("XXW", 1),
         ("XX2WW", 4),
-        
         # Complex real-world costs
-        ("2WW", 4),      # Wrath of God
-        ("1UU", 3),      # Counterspell
-        ("3UU", 5),      # Force of Will
-        ("WUBRG", 5),    # Child of Alara
-        ("16", 16),      # Draco
-        ("XRR", 2),      # Rolling Thunder
+        ("2WW", 4),  # Wrath of God
+        ("1UU", 3),  # Counterspell
+        ("3UU", 5),  # Force of Will
+        ("WUBRG", 5),  # Child of Alara
+        ("16", 16),  # Draco
+        ("XRR", 2),  # Rolling Thunder
         ("15GGGGGWWWWW", 25),  # Autochthon Wurm
     ]
 
 
 @pytest.fixture
-def color_identity_test_cases() -> List[Tuple[str, Color]]:
+def color_identity_test_cases() -> list[tuple[str, Color]]:
     """Provide comprehensive color identity test cases."""
     return [
         # Mono-color cases
@@ -436,7 +430,6 @@ def color_identity_test_cases() -> List[Tuple[str, Color]]:
         ("3BB", Color.BLACK),
         ("5RR", Color.RED),
         ("10G", Color.GREEN),
-        
         # Colorless cases
         ("", Color.COLORLESS),
         ("0", Color.COLORLESS),
@@ -446,7 +439,6 @@ def color_identity_test_cases() -> List[Tuple[str, Color]]:
         ("1C", Color.COLORLESS),
         ("CC", Color.COLORLESS),
         ("16", Color.COLORLESS),
-        
         # Two-color cases
         ("WU", Color.MULTICOLOR),
         ("WB", Color.MULTICOLOR),
@@ -460,14 +452,12 @@ def color_identity_test_cases() -> List[Tuple[str, Color]]:
         ("RG", Color.MULTICOLOR),
         ("1WU", Color.MULTICOLOR),
         ("2WB", Color.MULTICOLOR),
-        
         # Three+ color cases
         ("WUB", Color.MULTICOLOR),
         ("WUR", Color.MULTICOLOR),
         ("WUBRG", Color.MULTICOLOR),
         ("1WUBRG", Color.MULTICOLOR),
         ("2WUBRG", Color.MULTICOLOR),
-        
         # X costs with colors
         ("XW", Color.WHITE),
         ("XU", Color.BLUE),
@@ -477,33 +467,33 @@ def color_identity_test_cases() -> List[Tuple[str, Color]]:
 
 
 @pytest.fixture
-def invalid_mana_cost_patterns() -> List[str]:
+def invalid_mana_cost_patterns() -> list[str]:
     """Provide invalid mana cost patterns for validation testing."""
     return [
-        "Y",           # Invalid mana symbol
-        "Z",           # Invalid mana symbol  
-        "1Y",          # Contains invalid symbol
-        "2Z3",         # Contains invalid symbol
-        "WQ",          # Q is not valid
-        "UL",          # L is not valid
-        "BH",          # H is not valid
-        "RF",          # F is not valid
-        "GJ",          # J is not valid
-        "1WY",         # Mixed valid and invalid
-        "abc",         # Lowercase letters
-        "wubrg",       # Lowercase colored mana
-        "1w2u",        # Lowercase in mixed cost
-        "!@#",         # Special characters
-        "W U",         # Spaces not allowed
-        "1-R",         # Hyphens not allowed
-        "W/U",         # Slashes not allowed
-        "(2/W)",       # Parentheses not allowed
-        "{W}",         # Curly braces not allowed
+        "Y",  # Invalid mana symbol
+        "Z",  # Invalid mana symbol
+        "1Y",  # Contains invalid symbol
+        "2Z3",  # Contains invalid symbol
+        "WQ",  # Q is not valid
+        "UL",  # L is not valid
+        "BH",  # H is not valid
+        "RF",  # F is not valid
+        "GJ",  # J is not valid
+        "1WY",  # Mixed valid and invalid
+        "abc",  # Lowercase letters
+        "wubrg",  # Lowercase colored mana
+        "1w2u",  # Lowercase in mixed cost
+        "!@#",  # Special characters
+        "W U",  # Spaces not allowed
+        "1-R",  # Hyphens not allowed
+        "W/U",  # Slashes not allowed
+        "(2/W)",  # Parentheses not allowed
+        "{W}",  # Curly braces not allowed
     ]
 
 
 @pytest.fixture
-def all_card_types() -> List[CardType]:
+def all_card_types() -> list[CardType]:
     """Provide all available card types for testing."""
     return [
         CardType.CREATURE,
@@ -512,12 +502,12 @@ def all_card_types() -> List[CardType]:
         CardType.ENCHANTMENT,
         CardType.ARTIFACT,
         CardType.PLANESWALKER,
-        CardType.LAND
+        CardType.LAND,
     ]
 
 
 @pytest.fixture
-def all_colors() -> List[Color]:
+def all_colors() -> list[Color]:
     """Provide all available colors for testing."""
     return [
         Color.WHITE,
@@ -526,18 +516,18 @@ def all_colors() -> List[Color]:
         Color.RED,
         Color.GREEN,
         Color.COLORLESS,
-        Color.MULTICOLOR
+        Color.MULTICOLOR,
     ]
 
 
 @pytest.fixture
-def all_rarities() -> List[str]:
+def all_rarities() -> list[str]:
     """Provide all valid rarity values for testing."""
     return ["Common", "Uncommon", "Rare", "Mythic"]
 
 
 @pytest.fixture
-def boundary_test_cases() -> Dict[str, List]:
+def boundary_test_cases() -> dict[str, list]:
     """Provide boundary test cases for various validation rules."""
     return {
         "valid_names": [
@@ -586,7 +576,7 @@ def boundary_test_cases() -> Dict[str, List]:
 
 
 @pytest.fixture
-def famous_mtg_cards() -> List[Dict[str, any]]:
+def famous_mtg_cards() -> list[dict[str, any]]:
     """Provide data for famous MTG cards for realistic testing."""
     return [
         {
@@ -595,7 +585,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "mana_cost": "R",
             "color": Color.RED,
             "text": "Deal 3 damage to any target.",
-            "rarity": "Common"
+            "rarity": "Common",
         },
         {
             "name": "Black Lotus",
@@ -603,7 +593,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "mana_cost": "0",
             "color": Color.COLORLESS,
             "text": "T, Sacrifice Black Lotus: Add three mana of any one color.",
-            "rarity": "Rare"
+            "rarity": "Rare",
         },
         {
             "name": "Ancestral Recall",
@@ -611,7 +601,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "mana_cost": "U",
             "color": Color.BLUE,
             "text": "Target player draws three cards.",
-            "rarity": "Rare"
+            "rarity": "Rare",
         },
         {
             "name": "Serra Angel",
@@ -621,7 +611,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "power": 4,
             "toughness": 4,
             "text": "Flying, vigilance",
-            "rarity": "Rare"
+            "rarity": "Rare",
         },
         {
             "name": "Shivan Dragon",
@@ -631,7 +621,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "power": 5,
             "toughness": 5,
             "text": "Flying",
-            "rarity": "Rare"
+            "rarity": "Rare",
         },
         {
             "name": "Force of Nature",
@@ -641,7 +631,7 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "power": 8,
             "toughness": 8,
             "text": "Trample. At the beginning of your upkeep, Force of Nature deals 8 damage to you unless you pay GGGG.",
-            "rarity": "Rare"
+            "rarity": "Rare",
         },
         {
             "name": "Nightmare",
@@ -651,13 +641,13 @@ def famous_mtg_cards() -> List[Dict[str, any]]:
             "power": 99,  # Variable, using max for test
             "toughness": 99,  # Variable, using max for test
             "text": "Flying. Nightmare's power and toughness are each equal to the number of Swamps you control.",
-            "rarity": "Rare"
-        }
+            "rarity": "Rare",
+        },
     ]
 
 
 @pytest.fixture
-def edge_case_cards() -> List[Dict[str, any]]:
+def edge_case_cards() -> list[dict[str, any]]:
     """Provide edge case card data for comprehensive testing."""
     return [
         {
@@ -668,7 +658,7 @@ def edge_case_cards() -> List[Dict[str, any]]:
             "power": 0,
             "toughness": 1,
             "text": "Test creature with zero power.",
-            "rarity": "Common"
+            "rarity": "Common",
         },
         {
             "name": "Zero Toughness Creature",
@@ -678,7 +668,7 @@ def edge_case_cards() -> List[Dict[str, any]]:
             "power": 1,
             "toughness": 0,
             "text": "Test creature with zero toughness.",
-            "rarity": "Common"
+            "rarity": "Common",
         },
         {
             "name": "Maximum Stats Creature",
@@ -688,14 +678,14 @@ def edge_case_cards() -> List[Dict[str, any]]:
             "power": 99,
             "toughness": 99,
             "text": "Test creature with maximum stats.",
-            "rarity": "Mythic"
+            "rarity": "Mythic",
         },
         {
             "name": "Empty Text Card",
             "card_type": CardType.INSTANT,
             "mana_cost": "0",
             "color": Color.COLORLESS,
-            "rarity": "Common"
+            "rarity": "Common",
         },
         {
             "name": "Maximum Text Length Card",
@@ -704,6 +694,6 @@ def edge_case_cards() -> List[Dict[str, any]]:
             "color": Color.COLORLESS,
             "text": "A" * 500,  # Maximum allowed text length
             "flavor_text": "A" * 300,  # Maximum allowed flavor text length
-            "rarity": "Rare"
-        }
+            "rarity": "Rare",
+        },
     ]

@@ -1,12 +1,11 @@
 """Comprehensive tests for the MTG Card domain model."""
 
-import pytest
 from datetime import datetime
 from typing import Optional
 
-from pydantic import ValidationError
-
+import pytest
 from magic_tg_card_generator.models import Card, CardType, Color
+from pydantic import ValidationError
 
 
 class TestMTGCardCreation:
@@ -23,9 +22,9 @@ class TestMTGCardCreation:
             toughness=4,
             text="Flying, haste",
             flavor_text="A dragon's roar splits the sky.",
-            rarity="Rare"
+            rarity="Rare",
         )
-        
+
         assert card.name == "Lightning Bolt Dragon"
         assert card.card_type == CardType.CREATURE
         assert card.mana_cost == "3RR"
@@ -45,9 +44,9 @@ class TestMTGCardCreation:
             mana_cost="R",
             color=Color.RED,
             text="Deal 3 damage to any target.",
-            rarity="Common"
+            rarity="Common",
         )
-        
+
         assert card.name == "Lightning Bolt"
         assert card.card_type == CardType.INSTANT
         assert card.mana_cost == "R"
@@ -65,9 +64,9 @@ class TestMTGCardCreation:
             mana_cost="2WW",
             color=Color.WHITE,
             text="Destroy all creatures. They can't be regenerated.",
-            rarity="Rare"
+            rarity="Rare",
         )
-        
+
         assert card.name == "Wrath of God"
         assert card.card_type == CardType.SORCERY
         assert card.mana_cost == "2WW"
@@ -81,9 +80,9 @@ class TestMTGCardCreation:
             mana_cost="2U",
             color=Color.BLUE,
             text="Whenever an opponent casts a spell, you may draw a card unless that player pays 1.",
-            rarity="Common"
+            rarity="Common",
         )
-        
+
         assert card.name == "Rhystic Study"
         assert card.card_type == CardType.ENCHANTMENT
         assert card.mana_cost == "2U"
@@ -97,9 +96,9 @@ class TestMTGCardCreation:
             mana_cost="1",
             color=Color.COLORLESS,
             text="T: Add CC.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         )
-        
+
         assert card.name == "Sol Ring"
         assert card.card_type == CardType.ARTIFACT
         assert card.mana_cost == "1"
@@ -113,9 +112,9 @@ class TestMTGCardCreation:
             mana_cost="2UU",
             color=Color.BLUE,
             text="+2: Look at the top card of target player's library.",
-            rarity="Mythic"
+            rarity="Mythic",
         )
-        
+
         assert card.name == "Jace, the Mind Sculptor"
         assert card.card_type == CardType.PLANESWALKER
         assert card.mana_cost == "2UU"
@@ -129,9 +128,9 @@ class TestMTGCardCreation:
             mana_cost="",
             color=Color.GREEN,
             text="T: Add G.",
-            rarity="Common"
+            rarity="Common",
         )
-        
+
         assert card.name == "Lightning Bolt Forest"
         assert card.card_type == CardType.LAND
         assert card.mana_cost == ""
@@ -145,9 +144,9 @@ class TestMTGCardCreation:
             mana_cost="RW",
             color=Color.MULTICOLOR,
             text="Deal 3 damage to any target. You gain 3 life.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         )
-        
+
         assert card.name == "Lightning Helix"
         assert card.color == Color.MULTICOLOR
         assert card.mana_cost == "RW"
@@ -165,9 +164,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=1,
-                toughness=1
+                toughness=1,
             )
-        
+
         assert "String should have at least 1 character" in str(exc_info.value)
 
     def test_invalid_long_name_raises_error(self) -> None:
@@ -180,9 +179,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=1,
-                toughness=1
+                toughness=1,
             )
-        
+
         assert "String should have at most 100 characters" in str(exc_info.value)
 
     def test_invalid_mana_cost_pattern_raises_error(self) -> None:
@@ -192,9 +191,9 @@ class TestMTGCardValidation:
                 name="Invalid Card",
                 card_type=CardType.INSTANT,
                 mana_cost="2Z3",  # Z is not a valid mana symbol
-                color=Color.RED
+                color=Color.RED,
             )
-        
+
         assert "String should match pattern" in str(exc_info.value)
 
     def test_invalid_rarity_raises_error(self) -> None:
@@ -205,9 +204,9 @@ class TestMTGCardValidation:
                 card_type=CardType.INSTANT,
                 mana_cost="1R",
                 color=Color.RED,
-                rarity="Invalid"
+                rarity="Invalid",
             )
-        
+
         assert "String should match pattern" in str(exc_info.value)
 
     def test_negative_power_raises_error(self) -> None:
@@ -219,9 +218,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=-1,
-                toughness=1
+                toughness=1,
             )
-        
+
         assert "greater than or equal to 0" in str(exc_info.value)
 
     def test_excessive_power_raises_error(self) -> None:
@@ -233,9 +232,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=100,
-                toughness=1
+                toughness=1,
             )
-        
+
         assert "less than or equal to 99" in str(exc_info.value)
 
     def test_negative_toughness_raises_error(self) -> None:
@@ -247,9 +246,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=1,
-                toughness=-1
+                toughness=-1,
             )
-        
+
         assert "greater than or equal to 0" in str(exc_info.value)
 
     def test_excessive_toughness_raises_error(self) -> None:
@@ -261,9 +260,9 @@ class TestMTGCardValidation:
                 mana_cost="1R",
                 color=Color.RED,
                 power=1,
-                toughness=100
+                toughness=100,
             )
-        
+
         assert "less than or equal to 99" in str(exc_info.value)
 
     def test_power_toughness_on_non_creature_raises_error(self) -> None:
@@ -275,10 +274,12 @@ class TestMTGCardValidation:
                 mana_cost="1U",
                 color=Color.BLUE,
                 power=2,
-                toughness=2
+                toughness=2,
             )
-        
-        assert "Power and toughness can only be set for creatures" in str(exc_info.value)
+
+        assert "Power and toughness can only be set for creatures" in str(
+            exc_info.value
+        )
 
     def test_creature_without_power_allows_none(self) -> None:
         """Test that creature without power is allowed in current implementation."""
@@ -288,9 +289,9 @@ class TestMTGCardValidation:
             card_type=CardType.CREATURE,
             mana_cost="1R",
             color=Color.RED,
-            toughness=1
+            toughness=1,
         )
-        
+
         assert card.power is None
         assert card.toughness == 1
 
@@ -302,9 +303,9 @@ class TestMTGCardValidation:
             card_type=CardType.CREATURE,
             mana_cost="1R",
             color=Color.RED,
-            power=1
+            power=1,
         )
-        
+
         assert card.power == 1
         assert card.toughness is None
 
@@ -317,9 +318,9 @@ class TestMTGCardValidation:
                 card_type=CardType.INSTANT,
                 mana_cost="1R",
                 color=Color.RED,
-                text=long_text
+                text=long_text,
             )
-        
+
         assert "String should have at most 500 characters" in str(exc_info.value)
 
     def test_long_flavor_text_raises_error(self) -> None:
@@ -331,9 +332,9 @@ class TestMTGCardValidation:
                 card_type=CardType.INSTANT,
                 mana_cost="1R",
                 color=Color.RED,
-                flavor_text=long_flavor
+                flavor_text=long_flavor,
             )
-        
+
         assert "String should have at most 300 characters" in str(exc_info.value)
 
 
@@ -348,9 +349,9 @@ class TestMTGCardMethods:
             mana_cost="1R",
             color=Color.RED,
             power=1,
-            toughness=1
+            toughness=1,
         )
-        
+
         # Note: This method doesn't exist yet in the current model,
         # but we're testing for the expected domain model
         assert card.card_type == CardType.CREATURE
@@ -361,20 +362,17 @@ class TestMTGCardMethods:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         assert card.card_type != CardType.CREATURE
 
     def test_is_land_method_true_for_land(self) -> None:
         """Test that is_land returns True for land cards."""
         card = Card(
-            name="Forest",
-            card_type=CardType.LAND,
-            mana_cost="",
-            color=Color.GREEN
+            name="Forest", card_type=CardType.LAND, mana_cost="", color=Color.GREEN
         )
-        
+
         assert card.card_type == CardType.LAND
 
     def test_is_land_method_false_for_non_land(self) -> None:
@@ -383,9 +381,9 @@ class TestMTGCardMethods:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         assert card.card_type != CardType.LAND
 
     def test_converted_mana_cost_simple_numbers(self) -> None:
@@ -394,9 +392,9 @@ class TestMTGCardMethods:
             name="Test Card",
             card_type=CardType.INSTANT,
             mana_cost="3",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.converted_mana_cost == 3
 
     def test_converted_mana_cost_colored_mana(self) -> None:
@@ -405,9 +403,9 @@ class TestMTGCardMethods:
             name="Test Card",
             card_type=CardType.INSTANT,
             mana_cost="2RUB",
-            color=Color.MULTICOLOR
+            color=Color.MULTICOLOR,
         )
-        
+
         assert card.converted_mana_cost == 5  # 2 + R + U + B
 
     def test_converted_mana_cost_double_digits(self) -> None:
@@ -416,20 +414,17 @@ class TestMTGCardMethods:
             name="Expensive Card",
             card_type=CardType.SORCERY,
             mana_cost="12R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         assert card.converted_mana_cost == 13  # 12 + R
 
     def test_converted_mana_cost_with_x(self) -> None:
         """Test CMC calculation with X in cost."""
         card = Card(
-            name="X Spell",
-            card_type=CardType.INSTANT,
-            mana_cost="XRR",
-            color=Color.RED
+            name="X Spell", card_type=CardType.INSTANT, mana_cost="XRR", color=Color.RED
         )
-        
+
         assert card.converted_mana_cost == 2  # X counts as 0 + R + R
 
     def test_converted_mana_cost_empty_cost(self) -> None:
@@ -438,9 +433,9 @@ class TestMTGCardMethods:
             name="Free Spell",
             card_type=CardType.INSTANT,
             mana_cost="",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.converted_mana_cost == 0
 
     def test_converted_mana_cost_zero(self) -> None:
@@ -449,9 +444,9 @@ class TestMTGCardMethods:
             name="Zero Cost Spell",
             card_type=CardType.INSTANT,
             mana_cost="0",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.converted_mana_cost == 0
 
 
@@ -469,11 +464,11 @@ class TestMTGCardSerialization:
             toughness=2,
             text="Haste",
             flavor_text="Fast and furious.",
-            rarity="Common"
+            rarity="Common",
         )
-        
+
         card_dict = card.to_dict()
-        
+
         assert isinstance(card_dict, dict)
         assert card_dict["name"] == "Test Card"
         assert card_dict["card_type"] == "Creature"
@@ -496,11 +491,11 @@ class TestMTGCardSerialization:
             "toughness": 2,
             "text": "Haste",
             "flavor_text": "Fast and furious.",
-            "rarity": "Common"
+            "rarity": "Common",
         }
-        
+
         card = Card.from_dict(card_data)
-        
+
         assert card.name == "Test Card"
         assert card.card_type == CardType.CREATURE
         assert card.color == Color.RED
@@ -515,11 +510,11 @@ class TestMTGCardSerialization:
             mana_cost="1U",
             color=Color.BLUE,
             text="Draw a card.",
-            rarity="Common"
+            rarity="Common",
         )
-        
+
         json_str = card.model_dump_json()
-        
+
         assert isinstance(json_str, str)
         assert "Test Card" in json_str
         assert "Instant" in json_str
@@ -533,13 +528,13 @@ class TestMTGCardSerialization:
             mana_cost="1WW",
             color=Color.WHITE,
             text="Whenever a creature enters the battlefield, you gain 1 life.",
-            rarity="Uncommon"
+            rarity="Uncommon",
         )
-        
+
         # Convert to dict and back
         card_dict = original_card.to_dict()
         recreated_card = Card.from_dict(card_dict)
-        
+
         # Cards should be equal (excluding created_at timestamp)
         assert recreated_card.name == original_card.name
         assert recreated_card.card_type == original_card.card_type
@@ -559,17 +554,17 @@ class TestMTGCardEquality:
             card_type=CardType.INSTANT,
             mana_cost="R",
             color=Color.RED,
-            text="Deal 3 damage to any target."
+            text="Deal 3 damage to any target.",
         )
-        
+
         card2 = Card(
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
             color=Color.RED,
-            text="Deal 3 damage to any target."
+            text="Deal 3 damage to any target.",
         )
-        
+
         assert card1 == card2
 
     def test_card_inequality_different_names(self) -> None:
@@ -578,16 +573,13 @@ class TestMTGCardEquality:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         card2 = Card(
-            name="Shock",
-            card_type=CardType.INSTANT,
-            mana_cost="R",
-            color=Color.RED
+            name="Shock", card_type=CardType.INSTANT, mana_cost="R", color=Color.RED
         )
-        
+
         assert card1 != card2
 
     def test_card_inequality_different_types(self) -> None:
@@ -596,16 +588,16 @@ class TestMTGCardEquality:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         card2 = Card(
             name="Lightning Bolt",
             card_type=CardType.SORCERY,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         assert card1 != card2
 
     def test_card_inequality_with_non_card_object(self) -> None:
@@ -614,12 +606,12 @@ class TestMTGCardEquality:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         assert card != "not a card"
         assert card != 42
-        assert card != None
+        assert card is not None
 
 
 class TestMTGCardStringRepresentation:
@@ -633,11 +625,11 @@ class TestMTGCardStringRepresentation:
             mana_cost="3RR",
             color=Color.RED,
             power=4,
-            toughness=4
+            toughness=4,
         )
-        
+
         card_str = str(card)
-        
+
         assert "Lightning Bolt Dragon" in card_str
         assert "3RR" in card_str
         assert "Creature" in card_str
@@ -649,11 +641,11 @@ class TestMTGCardStringRepresentation:
             name="Lightning Bolt",
             card_type=CardType.INSTANT,
             mana_cost="R",
-            color=Color.RED
+            color=Color.RED,
         )
-        
+
         card_str = str(card)
-        
+
         assert "Lightning Bolt" in card_str
         assert "R" in card_str
         assert "Instant" in card_str
@@ -672,9 +664,9 @@ class TestMTGCardEdgeCases:
             mana_cost="0",
             color=Color.COLORLESS,
             power=0,
-            toughness=0
+            toughness=0,
         )
-        
+
         assert card.power == 0
         assert card.toughness == 0
         assert card.converted_mana_cost == 0
@@ -687,9 +679,9 @@ class TestMTGCardEdgeCases:
             mana_cost="10",
             color=Color.COLORLESS,
             power=99,
-            toughness=99
+            toughness=99,
         )
-        
+
         assert card.power == 99
         assert card.toughness == 99
 
@@ -699,23 +691,23 @@ class TestMTGCardEdgeCases:
             name="Simple Card",
             card_type=CardType.INSTANT,
             mana_cost="1",
-            color=Color.COLORLESS
+            color=Color.COLORLESS,
         )
-        
+
         assert card.text is None
         assert card.flavor_text is None
 
     def test_all_rarity_options(self) -> None:
         """Test all valid rarity options."""
         rarities = ["Common", "Uncommon", "Rare", "Mythic"]
-        
+
         for rarity in rarities:
             card = Card(
                 name=f"Test {rarity} Card",
                 card_type=CardType.INSTANT,
                 mana_cost="1",
                 color=Color.COLORLESS,
-                rarity=rarity
+                rarity=rarity,
             )
             assert card.rarity == rarity
 
@@ -732,15 +724,17 @@ class TestMTGCardEdgeCases:
             ("XUU", 2),
             ("16WWUUBBRRGGCC", 28),  # 16 + 2W + 2U + 2B + 2R + 2G + 2C = 28
         ]
-        
+
         for mana_cost, expected_cmc in test_costs:
             card = Card(
                 name=f"Test Card {mana_cost}",
                 card_type=CardType.INSTANT,
                 mana_cost=mana_cost,
-                color=Color.COLORLESS
+                color=Color.COLORLESS,
             )
-            assert card.converted_mana_cost == expected_cmc, f"Failed for mana cost: {mana_cost}"
+            assert (
+                card.converted_mana_cost == expected_cmc
+            ), f"Failed for mana cost: {mana_cost}"
 
     def test_all_card_types(self) -> None:
         """Test creating cards of all different types."""
@@ -751,9 +745,9 @@ class TestMTGCardEdgeCases:
             CardType.ENCHANTMENT,
             CardType.ARTIFACT,
             CardType.PLANESWALKER,
-            CardType.LAND
+            CardType.LAND,
         ]
-        
+
         for card_type in card_types:
             if card_type == CardType.CREATURE:
                 card = Card(
@@ -762,16 +756,16 @@ class TestMTGCardEdgeCases:
                     mana_cost="1",
                     color=Color.COLORLESS,
                     power=1,
-                    toughness=1
+                    toughness=1,
                 )
             else:
                 card = Card(
                     name=f"Test {card_type.value}",
                     card_type=card_type,
                     mana_cost="1",
-                    color=Color.COLORLESS
+                    color=Color.COLORLESS,
                 )
-            
+
             assert card.card_type == card_type
 
     def test_all_colors(self) -> None:
@@ -783,14 +777,14 @@ class TestMTGCardEdgeCases:
             Color.RED,
             Color.GREEN,
             Color.COLORLESS,
-            Color.MULTICOLOR
+            Color.MULTICOLOR,
         ]
-        
+
         for color in colors:
             card = Card(
                 name=f"Test {color.value} Card",
                 card_type=CardType.INSTANT,
                 mana_cost="1",
-                color=color
+                color=color,
             )
             assert card.color == color
