@@ -1619,8 +1619,15 @@ class CardManagementTab(QWidget):
             )
             return
 
+        # Get the actual cards list from crud_manager
+        cards_list = []
+        if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+            cards_list = self.crud_manager.cards
+        elif self.cards:
+            cards_list = self.cards
+
         selected_cards = [
-            self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+            cards_list[row] for row in selected_rows if 0 <= row < len(cards_list)
         ]
         parent = get_main_window()
         if parent and hasattr(parent, "generation_controller"):
@@ -1642,8 +1649,15 @@ class CardManagementTab(QWidget):
             )
             return
 
+        # Get the actual cards list from crud_manager
+        cards_list = []
+        if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+            cards_list = self.crud_manager.cards
+        elif self.cards:
+            cards_list = self.cards
+
         selected_cards = [
-            self.cards[row] for row in selected_rows if 0 <= row < len(self.cards)
+            cards_list[row] for row in selected_rows if 0 <= row < len(cards_list)
         ]
         parent = get_main_window()
         if parent and hasattr(parent, "generation_controller"):
@@ -1740,10 +1754,17 @@ class CardManagementTab(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
+            # Get the actual cards list from crud_manager
+            cards_list = []
+            if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+                cards_list = self.crud_manager.cards
+            elif self.cards:
+                cards_list = self.cards
+
             deleted_count = 0
             for row in selected_rows:
-                if 0 <= row < len(self.cards):
-                    card = self.cards[row]
+                if 0 <= row < len(cards_list):
+                    card = cards_list[row]
 
                     # Delete files
                     if (
@@ -2031,10 +2052,17 @@ class CardManagementTab(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
+            # Get the actual cards list from crud_manager
+            cards_list = []
+            if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+                cards_list = self.crud_manager.cards
+            elif self.cards:
+                cards_list = self.cards
+
             deleted_count = 0
             for row in selected_rows:
-                if 0 <= row < len(self.cards):
-                    card = self.cards[row]
+                if 0 <= row < len(cards_list):
+                    card = cards_list[row]
 
                     # Delete files
                     if (
