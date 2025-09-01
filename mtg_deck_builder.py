@@ -1834,19 +1834,26 @@ class CardManagementTab(QWidget):
 
     def update_stats(self):
         """Update statistics label with detailed card type breakdown and color distribution"""
-        total = len(self.cards)
-        lands = sum(1 for c in self.cards if c.is_land())
-        creatures = sum(1 for c in self.cards if c.is_creature())
+        # Get the actual cards list from crud_manager or fallback to self.cards
+        cards_list = []
+        if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+            cards_list = self.crud_manager.cards
+        elif self.cards:
+            cards_list = self.cards
+
+        total = len(cards_list)
+        lands = sum(1 for c in cards_list if c.is_land())
+        creatures = sum(1 for c in cards_list if c.is_creature())
         instants = sum(
-            1 for c in self.cards if "Instant" in c.type and "Creature" not in c.type
+            1 for c in cards_list if "Instant" in c.type and "Creature" not in c.type
         )
-        sorceries = sum(1 for c in self.cards if "Sorcery" in c.type)
+        sorceries = sum(1 for c in cards_list if "Sorcery" in c.type)
         artifacts = sum(
-            1 for c in self.cards if "Artifact" in c.type and "Creature" not in c.type
+            1 for c in cards_list if "Artifact" in c.type and "Creature" not in c.type
         )
         enchantments = sum(
             1
-            for c in self.cards
+            for c in cards_list
             if "Enchantment" in c.type and "Creature" not in c.type
         )
 
@@ -1856,7 +1863,7 @@ class CardManagementTab(QWidget):
         commander_colors = set()  # Track commander's color identity
         commander_name = "No Commander"
 
-        for card in self.cards:
+        for card in cards_list:
             if card.cost and card.cost != "-":
                 # Convert to string first to handle integer costs
                 cost = str(card.cost).upper()

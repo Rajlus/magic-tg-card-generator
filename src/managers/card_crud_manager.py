@@ -204,10 +204,23 @@ class CardCRUDManager(QObject):
             commander_colors = set()
 
         # Synchronize card status based on whether they have generated images
+        from pathlib import Path
+
         for card in self.cards:
             if hasattr(card, "card_path") and card.card_path:
-                # Card has been generated (has a card image)
-                card.status = "completed"
+                # Check if the file actually exists
+                card_file = Path(card.card_path)
+                if card_file.exists():
+                    # Card has been generated and file exists
+                    card.status = "completed"
+                else:
+                    # File doesn't exist anymore, mark as pending
+                    card.status = "pending"
+                    # Clear the path since file doesn't exist
+                    card.card_path = None
+                    # Also clear art_path if it exists
+                    if hasattr(card, "art_path"):
+                        card.art_path = None
             else:
                 # No card image means it should be pending
                 # (unless it's currently generating or failed)
