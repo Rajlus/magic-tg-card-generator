@@ -78,6 +78,15 @@ from src.managers.card_status_manager import CardStatusManager
 from src.managers.card_table_manager import CardTableManager
 from src.managers.card_validation_manager import CardValidationManager
 
+# Import deck services
+from src.services.deck import (
+    DeckBuilderService,
+    DeckValidator,
+    DeckStatistics,
+    DeckFormat,
+    ValidationResult,
+)
+
 # Import UI components
 from src.ui.tabs import ThemeConfigTab
 from src.ui.widgets import (
@@ -134,7 +143,12 @@ class CardManagementTab(QWidget):
         # Initialize file operations manager
         self.file_operations = CardFileOperations(self, logger=self._create_logger())
 
-        # Initialize validation manager
+        # Initialize deck builder service
+        self.deck_service = DeckBuilderService()
+        self.deck_validator = DeckValidator(DeckFormat.COMMANDER)
+        self.deck_stats = DeckStatistics()
+
+        # Initialize validation manager (keep for backward compatibility)
         self.validation_manager = CardValidationManager(
             self.cards, logger=self._create_logger()
         )
@@ -193,6 +207,8 @@ class CardManagementTab(QWidget):
     # CRUD Manager Signal Handlers
     def _on_card_created(self, card):
         """Handle card creation from CRUD manager"""
+        # Add to deck service
+        self.deck_service.add_card(card)
         # Stats are updated by CRUD manager internally
         pass
 
@@ -203,6 +219,8 @@ class CardManagementTab(QWidget):
 
     def _on_card_deleted(self, card_id):
         """Handle card deletion from CRUD manager"""
+        # Remove from deck service
+        self.deck_service.remove_card(str(card_id))
         # Refresh stats after deletion
         self.update_stats()
         self.status_manager.update_generation_stats()
@@ -1288,9 +1306,41 @@ class CardManagementTab(QWidget):
                 parent.log_message("INFO", f"Deleted {deleted_count} files")
 
     def load_cards(self, cards: list[MTGCard]):
-        """Load cards into table - delegates to CRUD manager"""
+        """Load cards into table - delegates to CRUD manager and syncs with deck service"""
         self.crud_manager.load_cards(cards)
+        
+        # Sync with deck builder service
+        self.deck_service.clear_deck()
+        for card in cards:
+            self.deck_service.add_card(card)
+        
+        # Set commander if it's the first card (Commander deck convention)
+        if cards and cards[0]:
+            self.deck_service.set_commander(cards[0])
 
+    def validate_deck(self):
+        """Validate deck using DeckValidator service"""
+        commander = self.deck_service.get_commander()
+        validation_result = self.deck_validator.validate(
+            self.deck_service.deck, 
+            commander
+        )
+        
+        # Log validation results
+        parent = get_main_window()
+        if parent and hasattr(parent, "log_message"):
+            if validation_result.is_valid:
+                parent.log_message("INFO", "✅ Deck is valid for Commander format")
+            else:
+                for error in validation_result.errors:
+                    parent.log_message("ERROR", f"❌ {error}")
+                for warning in validation_result.warnings:
+                    parent.log_message("WARNING", f"⚠️ {warning}")
+                for suggestion in validation_result.suggestions:
+                    parent.log_message("INFO", f"💡 {suggestion}")
+        
+        return validation_result
+    
     def sync_card_status_with_rendered_files(self):
         """Synchronize card status based on existing rendered files"""
         # Sync file operations with main window first
@@ -1304,7 +1354,7 @@ class CardManagementTab(QWidget):
         self.status_manager.update_generation_stats()
 
     def update_stats(self):
-        """Update statistics label with detailed card type breakdown and color distribution"""
+        """Update statistics label using DeckStatistics service"""
         # Get the actual cards list from crud_manager or fallback to self.cards
         cards_list = []
         if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
@@ -1312,62 +1362,36 @@ class CardManagementTab(QWidget):
         elif self.cards:
             cards_list = self.cards
 
+        # Use DeckStatistics service for calculations
+        stats = self.deck_stats.calculate_stats(cards_list)
+        type_dist = stats.get("type_distribution", {})
+        color_stats = stats.get("color_stats", {})
+        
         total = len(cards_list)
-        lands = sum(1 for c in cards_list if c.is_land())
-        creatures = sum(1 for c in cards_list if c.is_creature())
+        lands = type_dist.get("lands", 0)
+        creatures = type_dist.get("creatures", 0)
+        instants = type_dist.get("instants", 0)
+        sorceries = type_dist.get("sorceries", 0)
+        artifacts = type_dist.get("artifacts", 0)
+        enchantments = type_dist.get("enchantments", 0)
 
-        # Support both English and German card types
-        instants = sum(
-            1
-            for c in cards_list
-            if ("Instant" in c.type or "Spontanzauber" in c.type)
-            and "Creature" not in c.type
-            and "Kreatur" not in c.type
-        )
-        sorceries = sum(
-            1 for c in cards_list if "Sorcery" in c.type or "Hexerei" in c.type
-        )
-        artifacts = sum(
-            1
-            for c in cards_list
-            if ("Artifact" in c.type or "Artefakt" in c.type)
-            and "Creature" not in c.type
-            and "Kreatur" not in c.type
-        )
-        enchantments = sum(
-            1
-            for c in cards_list
-            if ("Enchantment" in c.type or "Verzauberung" in c.type)
-            and "Creature" not in c.type
-            and "Kreatur" not in c.type
-        )
-
-        # Calculate color distribution for all cards
-        color_counts = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
-        deck_colors = set()  # Track which colors appear in the deck
-        commander_colors = set()  # Track commander's color identity
-        commander_name = "No Commander"
-
-        for card in cards_list:
-            if card.cost and card.cost != "-":
-                # Convert to string first to handle integer costs
-                cost = str(card.cost).upper()
-                for color in ["W", "U", "B", "R", "G"]:
-                    count = cost.count(color)
-                    if count > 0:
-                        color_counts[color] += count
-                        deck_colors.add(color)
-
-            # Check if this is the commander (first card or legendary creature)
-            if card.id == 1 or "Legendary" in card.type:
-                if card.id == 1:  # This is definitely the commander
-                    commander_name = card.name
-                    if card.cost and card.cost != "-":
-                        # Convert to string first to handle integer costs
-                        cost = str(card.cost).upper()
-                        for color in ["W", "U", "B", "R", "G"]:
-                            if color in cost:
-                                commander_colors.add(color)
+        # Get color distribution from DeckStatistics
+        color_dist = color_stats.get("color_distribution", {})
+        color_counts = {k: v for k, v in color_dist.items() if k in ["W", "U", "B", "R", "G", "C"]}
+        
+        # Get deck colors from statistics
+        deck_colors = set(c for c, count in color_counts.items() if count > 0 and c != "C")
+        
+        # Get commander information
+        commander = self.deck_service.get_commander()
+        commander_name = commander.name if commander else "No Commander"
+        commander_colors = set()
+        
+        if commander and commander.cost and commander.cost != "-":
+            cost = str(commander.cost).upper()
+            for color in ["W", "U", "B", "R", "G"]:
+                if color in cost:
+                    commander_colors.add(color)
 
         # Build color string with symbols
         color_symbols = {"W": "", "U": "", "B": "", "R": "", "G": "", "C": ""}
