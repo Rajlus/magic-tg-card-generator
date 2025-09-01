@@ -1262,7 +1262,14 @@ class CardManagementTab(QWidget):
 
     def regenerate_all_cards_only(self):
         """Regenerate all cards while keeping existing images"""
-        if not self.cards:
+        # Get the actual cards list from crud_manager or fallback to self.cards
+        cards_list = []
+        if hasattr(self, "crud_manager") and hasattr(self.crud_manager, "cards"):
+            cards_list = self.crud_manager.cards
+        elif self.cards:
+            cards_list = self.cards
+
+        if not cards_list:
             QMessageBox.warning(self, "No Cards", "No cards to regenerate!")
             return
 
@@ -1299,7 +1306,7 @@ class CardManagementTab(QWidget):
 
         artwork_dir = Path("saved_decks") / deck_name / "artwork"
 
-        for card in self.cards:
+        for card in cards_list:
             # Skip pending cards
             if not hasattr(card, "status") or card.status == "pending":
                 skipped_pending.append(card.name)
